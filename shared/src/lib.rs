@@ -1,10 +1,10 @@
-use glam::Vec2;
+//use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RemoteState {
     pub id: usize,
-    pub position: Vec2,
+    pub position: glam::Vec2,
     pub rotation: f32,
 }
 
@@ -17,7 +17,7 @@ pub enum ServerMessage {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct State {
-    pub pos: Vec2,
+    pub pos: glam::Vec2,
     pub r: f32,
 }
 
