@@ -1,16 +1,21 @@
-use crate::entities::CollectibleToken;
+use crate::entities::{CollectibleToken, PlayerState};
 
 #[derive(Debug, Clone)]
-pub enum GameStatus {
+pub enum ExecutorToGameMessage {
     MassaConnected,
     ServerStreamingStarted,
     PlayerRegistered,
     Started,
-    Quit,
     Error(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum UpdateState {
     Collectibles(Vec<CollectibleToken>),
+}
+
+#[derive(Debug, Clone)]
+pub enum GameToExecutorMessage {
+    PlayerVirtuallyMoved(PlayerState),
+    Quit,
 }

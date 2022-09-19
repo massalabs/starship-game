@@ -10,11 +10,12 @@ use macroquad::Window;
 use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult};
 use massa_models::address::Address;
 use massa_models::api::EventFilter;
-use messages::{GameStatus, UpdateState};
+use messages::{ExecutorToGameMessage, GameToExecutorMessage, UpdateState};
 use utils::draw_box;
 use utils::vec2_from_angle;
 
 use std::str::FromStr;
+use std::sync::mpsc::Sender;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread;
@@ -65,6 +66,7 @@ impl Game {
     pub fn update(
         &mut self,
         update_state: Option<UpdateState>,
+        ch_game_executor_tx: Sender<GameToExecutorMessage>,
     ) {
         // match the update message
         if let Some(update_state) = update_state {
@@ -99,6 +101,12 @@ impl Game {
             }
         }
 
+        ch_game_executor_tx
+            .send(GameToExecutorMessage::PlayerVirtuallyMoved(
+                self.player_state.clone(),
+            ))
+            .unwrap();
+
         // update player position
         //self.player_state.position += vec2_from_angle(self.player_state.rotation) * SPEED;
 
@@ -118,10 +126,17 @@ impl Game {
 
     pub fn draw(&self) {
         // white screen
-        clear_background(color_u8!(255, 255, 255, 255));
+        clear_background(color_u8!(211, 198, 232, 255));
 
         // draw title
-        draw_text("Starship", 300f32, 100f32, 50f32, GREEN);
+        draw_text("Collect Massa Tokens", 600f32, 100f32, 20f32, BLUE);
+        draw_text(
+            "L/R - rotate, UP - move, SPACE - accelerate",
+            0f32,
+            550f32,
+            20f32,
+            RED,
+        );
 
         // draw the black obstacle box
         draw_box(Vec2::new(400f32, 200f32), Vec2::new(50f32, 20f32));
@@ -156,13 +171,31 @@ impl Game {
 
 #[tokio::main(worker_threads = 1)]
 async fn main() {
-    // create a channel to communicate between game and blockchain
-    let (chain_tx, chain_rx) = channel::<PollResult>();
-    let (game_status_tx, game_status_rx) = channel::<GameStatus>();
+    // create a channel to communicate between blockchain (Events) --> game
+    let (ch_blockchain_game_tx, ch_blockchain_game_rx) = channel::<PollResult>();
+
+    // create a channel to communicate between main executor --> game
+    let (ch_executor_game_tx, ch_executor_game_rx) = channel::<ExecutorToGameMessage>();
+
+    // create a channel to communicate between game --> main executor
+    let (ch_game_executor_tx, ch_game_executor_rx) = channel::<GameToExecutorMessage>();
+
+    // spawn a tokio thread receiving updates from within the game
+    // TODO: kill the thread upon game exit
+    tokio::spawn(async move {
+        loop {
+            let msg = ch_game_executor_rx.try_recv().ok();
+            if let Some(msg) = msg {
+                //println!("MSG {:?}", msg);
+            }
+        }
+    });
 
     // create massa rpc client
     let massa_client = MassaClient::new_testnet().await;
-    game_status_tx.send(GameStatus::MassaConnected).unwrap();
+    ch_executor_game_tx
+        .send(ExecutorToGameMessage::MassaConnected)
+        .unwrap();
 
     // TODO: check if player is registered or not, evtl. register
     let initial_player_state = PlayerState {
@@ -171,7 +204,9 @@ async fn main() {
         rotation: 0f32,
     };
     let initial_collectible_states = Vec::new();
-    game_status_tx.send(GameStatus::PlayerRegistered).unwrap();
+    ch_executor_game_tx
+        .send(ExecutorToGameMessage::PlayerRegistered)
+        .unwrap();
 
     // create events filter
     let event_extended_filter = ExtendedEventFilter {
@@ -187,9 +222,9 @@ async fn main() {
     };
     // start polling massa sc for events in a separate tokio thread
     let massa_client = Arc::new(massa_client);
-    poll_contract_events(massa_client, event_extended_filter, chain_tx).await;
-    game_status_tx
-        .send(GameStatus::ServerStreamingStarted)
+    poll_contract_events(massa_client, event_extended_filter, ch_blockchain_game_tx).await;
+    ch_executor_game_tx
+        .send(ExecutorToGameMessage::ServerStreamingStarted)
         .unwrap();
 
     // spawn the game in a separate none-tokio thread
@@ -204,14 +239,17 @@ async fn main() {
             run_game(
                 initial_player_state,
                 initial_collectible_states,
-                chain_rx,
-                game_status_rx,
+                ch_blockchain_game_rx,
+                ch_executor_game_rx,
+                ch_game_executor_tx,
             ),
         );
     });
 
     // join the game to main tokio thread
-    game_status_tx.send(GameStatus::Started).unwrap();
+    ch_executor_game_tx
+        .send(ExecutorToGameMessage::Started)
+        .unwrap();
     game_single_thread_handle.join().unwrap();
 }
 
@@ -219,25 +257,29 @@ async fn run_game(
     initial_player_state: PlayerState,
     initial_collectible_states: Vec<CollectibleToken>,
     chain_rx: Receiver<PollResult>,
-    game_status_rx: Receiver<GameStatus>,
+    ch_executor_game_rx: Receiver<ExecutorToGameMessage>,
+    ch_game_executor_tx: Sender<GameToExecutorMessage>,
 ) {
     let mut game = Game::new(initial_player_state, initial_collectible_states).await;
 
     loop {
+        // clone the game to executor tx sender
+        let ch_game_executor_tx = ch_game_executor_tx.clone();
+
         // receive and process external game messages
-        let game_status_msg = game_status_rx.try_recv().ok();
+        let game_status_msg = ch_executor_game_rx.try_recv().ok();
         if let Some(game_msg) = game_status_msg {
             match game_msg {
-                GameStatus::MassaConnected => {
+                ExecutorToGameMessage::MassaConnected => {
                     info!("Connected to Massa!")
                 }
-                GameStatus::ServerStreamingStarted => {
+                ExecutorToGameMessage::ServerStreamingStarted => {
                     info!("Server streaming Started!")
                 }
-                GameStatus::PlayerRegistered => {
+                ExecutorToGameMessage::PlayerRegistered => {
                     info!("Player Registered on Massa!")
                 }
-                GameStatus::Started => {
+                ExecutorToGameMessage::Started => {
                     info!("Game Started!")
                 }
                 _ => {
@@ -284,7 +326,7 @@ async fn run_game(
             }
         });
 
-        game.update(update);
+        game.update(update, ch_game_executor_tx);
         game.draw();
         if game.quit {
             return;
