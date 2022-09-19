@@ -592,8 +592,8 @@ export function asyncCreateCollectibles(_args: string): void {
  * @return {CollectibleEntity}- Position of the new massa token.
  */
 function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): CollectibleEntity {
-  const randomX: f32 = (<f32>_randomInRange(<f32>(screenWidth / 2.0)));
-  const randomY: f32 = (<f32>_randomInRange(<f32>(screenHeight / 2.0)));
+  const randomX: f32 = (<f32>_randomInRange(<f32>(screenWidth)));
+  const randomY: f32 = (<f32>_randomInRange(<f32>(screenHeight)));
 
   const posArgs: CollectibleEntity = {
     uuid: _generateUuid(),
