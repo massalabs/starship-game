@@ -1,0 +1,35 @@
+{
+  "name": "deployer",
+  "description": "Deployment scripts for compiling and deploying the Starship Game",
+  "main": "deploy-game.ts",
+  "scripts": {
+    "deploy-token": "ts-node ./deploy-token.ts",
+    "deploy-game": "ts-node ./deploy-game.ts",
+    "deploy-website": "ts-node ./deploy-website.ts",
+    "test-game": "ts-node ./test-game.ts",
+    "fix-lint": "tslint -c tslint.json '**/*.ts' --fix"
+  },
+  "author": "Massa Labs <info@massa.net>",
+  "contributors": [
+    "Evgeni Pirianov"
+  ],
+  "license": "(MIT AND Apache-2.0)",
+  "dependencies": {
+    "@massalabs/massa-sc-utils": "^2.1.7",
+    "@massalabs/massa-web3": "1.10.7",
+    "@noble/hashes": "^1.1.2",
+    "chalk": "^4.1.0",
+    "handlebars": "^4.7.7",
+    "ora": "^5.1.0",
+    "prompt": "^1.0.0",
+    "zip-a-folder": "^1.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.23",
+    "node-ts": "^5.1.2",
+    "ts-node": "^10.7.0",
+    "tslib": "^2.3.1",
+    "tslint": "^6.1.3",
+    "typescript": "^4.6.2"
+  }
+}

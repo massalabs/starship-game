@@ -1,0 +1,8 @@
+.direnv
+.DS_Store
+.envrc
+.idea
+.vscode
+*.swp*
+**/Cargo.lock
+**/target
