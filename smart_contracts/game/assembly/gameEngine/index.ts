@@ -15,7 +15,6 @@ import {
   collections,
   env,
 } from '@massalabs/massa-as-sdk/assembly';
-import {randomInt} from '@massalabs/as/assembly';
 import {Amount, Currency} from '@massalabs/as/assembly';
 import {Rectangle, _isIntersection} from './rectangle';
 import {PlayerEntity} from './playerEntity';
@@ -46,7 +45,7 @@ const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 // settings
 const PLAYER_REWARD_IN_TOKENS: u64 = 1;
 const THREADS: u8 = 32;
-const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 500;
+const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 100;
 const TOTAL_RANDOM_TOKENS: u16 = 10;
 const COLLECTIBLE_BOUNDING_BOX: f32 = 20;
 const PLAYER_BOUNDING_BOX: f32 = 30;
@@ -586,32 +585,15 @@ export function asyncCreateCollectibles(_args: string): void {
 }
 
 /**
- * Generates a random value with a limiting upper range.
- *
- * @param {i64} range - limiting range.
- * @return {i64}- value scaled in range.
- */
-function _randomInRange(range: i64): i64 {
-  // TODO: use randomInt() and also make negative numbers
-  const absRange = <i64>Math.abs(<f64>range);
-  const random: i64 = unsafeRandom();
-  const mod = random % absRange;
-  if (random > 0) {
-    return +mod;
-  } else {
-    return -mod;
-  }
-}
-
-/**
  * Generates a random positioned massa token.
  *
- * @param {Address} ownerAddress - Address of the game owner.
- * @return {Entity}- Position of the new massa token.
+ * @param {f32} screenWidth - Address of the game owner.
+ * @param {f32} screenHeight - Address of the game owner.
+ * @return {CollectibleEntity}- Position of the new massa token.
  */
-function _generateRandomCollectible(): CollectibleEntity {
-  const randomX = <f32>_randomInRange(<i64>(SCREEN_WIDTH / 2));
-  const randomY = <f32>_randomInRange(<i64>(SCREEN_HEIGHT / 2));
+function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): CollectibleEntity {
+  const randomX: f32 = (<f32>_randomInRange(<f32>(screenWidth / 2.0)));
+  const randomY: f32 = (<f32>_randomInRange(<f32>(screenHeight / 2.0)));
 
   const posArgs: CollectibleEntity = {
     uuid: _generateUuid(),
@@ -629,14 +611,40 @@ function _generateRandomCollectible(): CollectibleEntity {
  * @return {string}- stringified new tokens state.
  */
 function _generateNewRandomTokenState(): string {
+  // get screen width/height
+  const screenWidth = Storage.get(SCREEN_WIDTH_KEY);
+  const screenWidthF32: f64 = parseFloat(screenWidth);
+
+  const screenHeight = Storage.get(SCREEN_HEIGHT_KEY);
+  const screenHeightF32: f64 = parseFloat(screenHeight);
+
   // generate new random tokens
   let numTokens: u16 = 0;
   const generatedRandomTokens: Array<string> = [];
   while (numTokens < TOTAL_RANDOM_TOKENS) {
     const randomCollectibleEntity: CollectibleEntity =
-      _generateRandomCollectible();
+      _generateRandomCollectible(screenWidthF32, screenHeightF32);
     generatedRandomTokens.push(randomCollectibleEntity.serializeToString());
     numTokens++;
   }
   return generatedRandomTokens.join('@');
 }
+
+/**
+ * Generates a random value with a limiting upper range.
+ *
+ * @param {f32} range - limiting range.
+ * @return {f32}- value scaled in range.
+ */
+function _randomInRange(range: f32): f32 {
+  const absRange = <i64>Math.abs(range);
+  const random: i64 = unsafeRandom();
+  const mod = random % absRange;
+  if (random > 0) {
+    return <f32>Math.abs(<f64>mod);
+  } else {
+    return <f32>Math.abs(<f64>mod) * -1.0;
+  }
+}
+
+

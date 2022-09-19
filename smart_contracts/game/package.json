@@ -13,8 +13,7 @@
     "asbuild:engine": "asc assembly/gameEngine/index.ts -t build/gameEngine.wat -o build/gameEngine.wasm --exportRuntime --runtime stub --target release  --sourceMap --optimize",
     "asbuild:engine:caller": "node include_base64.js assembly/gameEngine/caller.ts && asc assembly/gameEngine/caller.m.ts --target release --exportRuntime --runtime stub --textFile build/callerEngine.wat -o build/callerEngine.wasm  --sourceMap --optimize && rm -rf assembly/gameEngine/*.m.ts",
     "asbuild:engine:runner": "node include_base64.js assembly/gameEngine/runner.ts && asc assembly/gameEngine/runner.m.ts --target release --exportRuntime --runtime stub --textFile build/runnerEngine.wat -o build/runnerEngine.wasm  --sourceMap --optimize && rm -rf assembly/gameEngine/*.m.ts",
-    "asbuild:engine:starter": "node include_base64.js assembly/gameEngine/starter.ts && asc assembly/gameEngine/starter.m.ts --target release --exportRuntime --runtime stub --textFile build/starterEngine.wat -o build/starterEngine.wasm  --sourceMap --optimize && rm -rf assembly/gameEngine/*.m.ts",
-    "asbuild": "yarn run asbuild:token && yarn run asbuild:token:caller && yarn run asbuild:engine && yarn run asbuild:engine:caller && yarn run asbuild:engine:runner && yarn run asbuild:engine:starter",
+    "asbuild": "yarn run asbuild:token && yarn run asbuild:token:caller && yarn run asbuild:engine && yarn run asbuild:engine:caller && yarn run asbuild:engine:runner",
     "fmt": "prettier --write '{*,**/*}.{js,ts,jsx,tsx,json}'",
     "lint:fix": "eslint --fix --ext .ts . && yarn fmt",
     "lint": "eslint --ext .ts . && prettier --check '{*,**/*}.{js,ts,jsx,tsx,json}'"
