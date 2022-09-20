@@ -186,7 +186,8 @@ impl Game {
     }
 }
 
-#[tokio::main(worker_threads = 1)]
+//#[tokio::main(worker_threads = 1)]
+#[tokio::main]
 async fn main() {
     // create a channel to communicate between blockchain (Events) --> game
     let (ch_blockchain_game_tx, ch_blockchain_game_rx) = channel::<PollResult>();
@@ -200,7 +201,7 @@ async fn main() {
     // spawn a tokio thread receiving updates from within the game
     // TODO: kill the thread upon game exit
     // TODO: make this a tokio thread
-    let game_executor_receiver_join_handle = thread::spawn(move || {
+    tokio::spawn(async move {
         println!("game_executor_receiver started");
         loop {
             let msg = ch_game_executor_rx.try_recv().ok();
@@ -276,7 +277,6 @@ async fn main() {
         .send(ExecutorToGameMessage::Started)
         .unwrap();
 
-    game_executor_receiver_join_handle.join().unwrap();
     game_single_thread_handle.join().unwrap();
 }
 
