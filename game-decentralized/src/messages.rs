@@ -1,4 +1,4 @@
-use crate::entities::{CollectibleToken, PlayerState};
+use crate::entities::{CollectibleToken, PlayerEntityOnchain, PlayerState};
 
 #[derive(Debug, Clone)]
 pub enum ExecutorToGameMessage {
@@ -10,12 +10,15 @@ pub enum ExecutorToGameMessage {
 }
 
 #[derive(Debug, Clone)]
-pub enum UpdateState {
-    Collectibles(Vec<CollectibleToken>),
-}
-
-#[derive(Debug, Clone)]
 pub enum GameToExecutorMessage {
     PlayerVirtuallyMoved(PlayerState),
     Quit,
+}
+
+#[derive(Debug, Clone)]
+pub enum OnchainUpdateMessage {
+    CollectiblesNewState(Vec<CollectibleToken>),
+    PlayerMovedOnchain(Vec<PlayerEntityOnchain>),
+    PlayerAddedOnchain(Vec<PlayerEntityOnchain>),
+    TokenCollectedOnchain(Vec<(String, String)>),
 }

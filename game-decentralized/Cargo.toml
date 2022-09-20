@@ -30,6 +30,10 @@ git = "https://github.com/massalabs/massa"
 [dependencies.massa_models]
 git = "https://github.com/massalabs/massa"
 
+# massa models
+[dependencies.massa_signature]
+git = "https://github.com/massalabs/massa"
+
 # TODO: add Solana/Polygon
 
 [profile.dev.package."*"]

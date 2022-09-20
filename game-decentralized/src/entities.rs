@@ -16,3 +16,13 @@ pub struct PlayerState {
     pub position: Vec2,
     pub rotation: f32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerEntityOnchain {
+    pub uuid: String,
+    pub address: String,
+    pub x: f32,
+    pub y: f32,
+    pub cbox: f32,
+    pub tokensCollected: u64,
+}

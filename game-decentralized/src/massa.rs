@@ -3,12 +3,29 @@ use massa_models::api::EventFilter;
 use massa_models::output_event::{EventExecutionContext, SCOutputEvent};
 use massa_models::slot::Slot;
 use massa_sdk::Client;
+use massa_signature::KeyPair;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{
     net::{IpAddr, Ipv4Addr},
     sync::mpsc::Sender,
 };
+
+pub const THREAD_COUNT: u8 = 32;
+
+pub fn generate_thread_addresses_hashmap() -> HashMap<u8, KeyPair> {
+    let mut thread_addresses_map: HashMap<u8, KeyPair> = HashMap::new();
+    while thread_addresses_map.keys().len() != THREAD_COUNT as usize {
+        let keypair = KeyPair::generate();
+        let address = Address::from_public_key(&keypair.get_public_key());
+        let thread_number = address.get_thread(THREAD_COUNT);
+        let a = address.to_string();
+        thread_addresses_map.insert(thread_number, keypair);
+        //let b = Address::from_str(&a).unwrap();
+    }
+    thread_addresses_map
+}
 
 pub fn sort_by_thread_and_period(
     a: &Slot,

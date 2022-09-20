@@ -4,13 +4,14 @@ mod messages;
 mod near;
 mod utils;
 
+use entities::PlayerEntityOnchain;
 use entities::{CollectibleToken, PlayerState};
 use macroquad::prelude::*;
 use macroquad::Window;
 use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult};
 use massa_models::address::Address;
 use massa_models::api::EventFilter;
-use messages::{ExecutorToGameMessage, GameToExecutorMessage, UpdateState};
+use messages::{ExecutorToGameMessage, GameToExecutorMessage, OnchainUpdateMessage};
 use utils::draw_box;
 use utils::vec2_from_angle;
 
@@ -20,17 +21,11 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread;
 
-/*
-use massa_signature::KeyPair;
-
-let keypair = KeyPair::generate();
-let address = Address::from_public_key(&keypair.get_public_key());
-let a = address.to_string();
-let b = Address::from_str(&a).unwrap();
-*/
-
-const EVENT_KEY: &'static str = "GAME_TOKENS_STATE_UPDATED";
-const GAME_SC_ADDRESS: &'static str = "A1E3fS4FdHatY7pYeZQ1x7sxApdgQv5eYiW4RH6P1ES7mJG34p4";
+const GAME_TOKENS_STATE_UPDATED_EVENT_KEY: &'static str = "GAME_TOKENS_STATE_UPDATED";
+const PLAYER_MOVED_EVENT_KEY: &'static str = "PLAYER_MOVED";
+const PLAYER_ADDED_EVENT_KEY: &'static str = "PLAYER_ADDED";
+const TOKEN_COLLECTED_EVENT_KEY: &'static str = "TOKEN_COLLECTED";
+const GAME_SC_ADDRESS: &'static str = "A1hxinauA5wrzLEAABTaNmfLQF7s52o2JoieTxT9B9TrjVUiUsZ";
 
 const ROT_SPEED: f32 = 0.015;
 const LIN_SPEED: f32 = 1.0;
@@ -65,18 +60,40 @@ impl Game {
 
     pub fn update(
         &mut self,
-        update_state: Option<UpdateState>,
+        update_state: Option<Vec<OnchainUpdateMessage>>,
         ch_game_executor_tx: Sender<GameToExecutorMessage>,
     ) {
-        // match the update message
+        // match the onchain update message
         if let Some(update_state) = update_state {
-            match update_state {
-                UpdateState::Collectibles(new_collectibles_state) => {
-                    info!("New Collectibles {:?}", new_collectibles_state.len());
-                    if new_collectibles_state.len() == MAX_COLLECTIBLES_ON_SCREEN {
-                        // new correct socket update
-                        self.collectible_states = new_collectibles_state;
+            for update in update_state.into_iter() {
+                match update {
+                    OnchainUpdateMessage::CollectiblesNewState(collectibles_new_state) => {
+                        info!(
+                            "Message:: New Collectibles state {:?}",
+                            collectibles_new_state.len()
+                        );
+                        if collectibles_new_state.len() == MAX_COLLECTIBLES_ON_SCREEN {
+                            // new correct socket update
+                            self.collectible_states = collectibles_new_state;
+                        }
                     }
+                    OnchainUpdateMessage::PlayerMovedOnchain(players_moved_onchain) => {
+                        if players_moved_onchain.len() > 0 {
+                            info!(
+                                "Message:: Players moved onchain {:?}",
+                                players_moved_onchain.len()
+                            );
+                        }
+                    }
+                    OnchainUpdateMessage::PlayerAddedOnchain(player_registered_onchain) => {
+                        if player_registered_onchain.len() > 0 {
+                            info!(
+                                "Message:: Players registered onchain {:?}",
+                                player_registered_onchain.len()
+                            );
+                        }
+                    }
+                    OnchainUpdateMessage::TokenCollectedOnchain(token_collected_onchain) => {}
                 }
             }
         }
@@ -182,7 +199,9 @@ async fn main() {
 
     // spawn a tokio thread receiving updates from within the game
     // TODO: kill the thread upon game exit
-    tokio::spawn(async move {
+    // TODO: make this a tokio thread
+    let game_executor_receiver_join_handle = thread::spawn(move || {
+        println!("game_executor_receiver started");
         loop {
             let msg = ch_game_executor_rx.try_recv().ok();
             if let Some(msg) = msg {
@@ -210,7 +229,12 @@ async fn main() {
 
     // create events filter
     let event_extended_filter = ExtendedEventFilter {
-        event_regex: Some(vec![EVENT_KEY.into()]), // enum all events we are interested in collecting
+        event_regex: Some(vec![
+            GAME_TOKENS_STATE_UPDATED_EVENT_KEY.into(),
+            PLAYER_MOVED_EVENT_KEY.into(),
+            PLAYER_ADDED_EVENT_KEY.into(),
+            TOKEN_COLLECTED_EVENT_KEY.into(),
+        ]), // enum all events we are interested in collecting
         event_filter: EventFilter {
             start: None,
             end: None,
@@ -228,6 +252,7 @@ async fn main() {
         .unwrap();
 
     // spawn the game in a separate none-tokio thread
+    // TODO: kill the thread upon game exit
     let game_single_thread_handle = thread::spawn(move || {
         Window::from_config(
             Conf {
@@ -250,6 +275,8 @@ async fn main() {
     ch_executor_game_tx
         .send(ExecutorToGameMessage::Started)
         .unwrap();
+
+    game_executor_receiver_join_handle.join().unwrap();
     game_single_thread_handle.join().unwrap();
 }
 
@@ -291,12 +318,15 @@ async fn run_game(
         // receive and process chain messages
         let chain_msg = chain_rx.try_recv().ok();
 
-        let update = chain_msg.and_then(|poll_result| match poll_result {
+        let onchain_updates = chain_msg.and_then(|poll_result| match poll_result {
             PollResult::Events(poll_result) => {
+                let mut cummulative_updates: Vec<OnchainUpdateMessage> = vec![];
+
+                // =================== collectible tokens update ===================
                 let collectible_token_update = poll_result
                     .iter()
                     .filter_map(|event| {
-                        if event.data.contains(EVENT_KEY) {
+                        if event.data.contains(GAME_TOKENS_STATE_UPDATED_EVENT_KEY) {
                             let event_parts: Vec<&str> = event.data.split("=").collect();
                             let event_data = event_parts[1].to_owned();
                             let event_parts: Vec<&str> = event_data.split("@").collect();
@@ -318,7 +348,59 @@ async fn run_game(
                     .flatten()
                     .collect::<Vec<CollectibleToken>>();
 
-                Some(UpdateState::Collectibles(collectible_token_update))
+                if !collectible_token_update.is_empty() {
+                    cummulative_updates.push(OnchainUpdateMessage::CollectiblesNewState(
+                        collectible_token_update,
+                    ));
+                }
+
+                // =================== players moved ===================
+                let players_moved_update = poll_result
+                    .iter()
+                    .filter_map(|event| {
+                        if event.data.contains(PLAYER_MOVED_EVENT_KEY) {
+                            let event_parts: Vec<&str> = event.data.split("=").collect();
+                            let event_data = event_parts[1].to_owned();
+                            let player_moved = serde_json::from_slice::<PlayerEntityOnchain>(
+                                event_data.as_bytes(),
+                            )
+                            .ok();
+                            return player_moved;
+                        }
+                        None
+                    })
+                    .collect::<Vec<PlayerEntityOnchain>>();
+
+                if !players_moved_update.is_empty() {
+                    cummulative_updates.push(OnchainUpdateMessage::PlayerMovedOnchain(
+                        players_moved_update,
+                    ));
+                }
+
+                // =================== players added ===================
+                let players_added_update = poll_result
+                    .iter()
+                    .filter_map(|event| {
+                        if event.data.contains(PLAYER_ADDED_EVENT_KEY) {
+                            let event_parts: Vec<&str> = event.data.split("=").collect();
+                            let event_data = event_parts[1].to_owned();
+                            let player_added = serde_json::from_slice::<PlayerEntityOnchain>(
+                                event_data.as_bytes(),
+                            )
+                            .ok();
+                            return player_added;
+                        }
+                        None
+                    })
+                    .collect::<Vec<PlayerEntityOnchain>>();
+
+                if !players_added_update.is_empty() {
+                    cummulative_updates.push(OnchainUpdateMessage::PlayerAddedOnchain(
+                        players_added_update,
+                    ));
+                }
+
+                Some(cummulative_updates)
             }
             PollResult::Error(e) => {
                 info!("Received error ? {:?}", e);
@@ -326,7 +408,7 @@ async fn run_game(
             }
         });
 
-        game.update(update, ch_game_executor_tx);
+        game.update(onchain_updates, ch_game_executor_tx);
         game.draw();
         if game.quit {
             return;
