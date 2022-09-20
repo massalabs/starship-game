@@ -25,7 +25,7 @@ const GAME_TOKENS_STATE_UPDATED_EVENT_KEY: &'static str = "GAME_TOKENS_STATE_UPD
 const PLAYER_MOVED_EVENT_KEY: &'static str = "PLAYER_MOVED";
 const PLAYER_ADDED_EVENT_KEY: &'static str = "PLAYER_ADDED";
 const TOKEN_COLLECTED_EVENT_KEY: &'static str = "TOKEN_COLLECTED";
-const GAME_SC_ADDRESS: &'static str = "A1hxinauA5wrzLEAABTaNmfLQF7s52o2JoieTxT9B9TrjVUiUsZ";
+const GAME_SC_ADDRESS: &'static str = "A1DztVV6kfTPsZTtE18wrj9BF1ff3vkzFBiyLtJw2nxvrtf85js";
 
 const ROT_SPEED: f32 = 0.015;
 const LIN_SPEED: f32 = 1.0;

@@ -13,9 +13,11 @@ import { IDatastoreEntryInput,
     ON_MASSA_EVENT_DATA,
     ON_MASSA_EVENT_ERROR,
     EOperationStatus,
-    IContractData} from "@massalabs/massa-web3";
+    IContractData,
+    IProvider,
+    ProviderType} from "@massalabs/massa-web3";
 
-const scAddress = "A1aC7wPd8CCyks266zCiU3LophK8zzj9fYxwTPBRpbgxRcTYG9t";
+const scAddress = "A1DztVV6kfTPsZTtE18wrj9BF1ff3vkzFBiyLtJw2nxvrtf85js";
 const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
 const gameOwnerAddress = "A12A2NAA3tTs9dW2t3MnoxpbADdLV7gWE9Le9BygsbTgjcFmMj4o";
 
@@ -38,21 +40,31 @@ interface IGameEntity {
     try {
 
         // init client
-        const baseAccount: IAccount = await WalletClient.walletGenerateNewAccount();
-        const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
-
+        const baseAccount: IAccount = await WalletClient.getAccountFromSecretKey("S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC");
+        //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
+        const providers: Array<IProvider> = [
+            {
+                url: "http://51.75.131.129:33035",
+                type: ProviderType.PUBLIC
+            } as IProvider,
+            {
+                url: "http://51.75.131.129:33034",
+                type: ProviderType.PRIVATE
+            } as IProvider
+        ];
+        const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
         //====================================================
         
-        
+        /*
         console.log(`Filtering for sc events....`);
         const eventsFilter = {
             start: null,
             end: null,
-            original_operation_id: null,
+            original_operation_id: null, //"iYuaiRHtq8EydqdtprLrVmswSs1e6FiNqhsrm1dpGFCgM2APn",
             original_caller_address: null,
             emitter_address: scAddress,
-            eventsNameRegex: "GAME_TOKENS_STATE_UPDATED",
+            eventsNameRegex: null, //"PLAYER_ADDED",
             is_final: true
         } as IEventRegexFilter;
                 
@@ -69,6 +81,8 @@ interface IGameEntity {
                   
         });
         eventPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
+        */
+        
         
 
         /*
@@ -98,11 +112,40 @@ interface IGameEntity {
             sequentialCoins: 0,
             targetAddress: scAddress,
             functionName: "registerPlayer", //playerAddress
-            parameter: "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT",
+            parameter: "A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu",
         } as ICallData);
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
         */
+
+        console.log(`Filtering for sc events....`);
+        const eventsFilter = {
+            start: null,
+            end: null,
+            original_operation_id: null, //"EGTXVsPFt2RY4iB3GXtNzqWHTej1pdcENNdCB2KrSfvamGmNy",
+            original_caller_address: null, //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT",
+            emitter_address: null, //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT", //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT", //scAddress,
+            eventsNameRegex: null, //"PLAYER_ADDED",
+            is_final: true
+        } as IEventRegexFilter;
+                
+        
+        const eventPoller = EventPoller.startEventPoller(
+            eventsFilter,
+            1000,
+            web3Client
+        );
+        eventPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
+            const element = events[events.length - 1];
+            //console.log("SLOT", element.context.slot);
+            events.filter((e) => {
+                return e.data.includes("PLAYER_ADDED=");
+            })
+            .forEach((e) => console.log("DATA", e.data));
+                  
+        });
+        eventPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
+        
 
         // read sc state
         /*
