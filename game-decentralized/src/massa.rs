@@ -1,15 +1,18 @@
 use massa_models::address::Address;
 use massa_models::amount::Amount;
-use massa_models::api::{EventFilter, OperationInput};
+use massa_models::api::{EventFilter, OperationInput, ReadOnlyCall};
 use massa_models::error::ModelsError;
-use massa_models::operation::{OperationType, Operation, OperationId, OperationSerializer, WrappedOperation};
-use massa_models::wrapped::WrappedContent;
+use massa_models::execution::ExecuteReadOnlyResponse;
+use massa_models::operation::{
+    Operation, OperationId, OperationSerializer, OperationType, WrappedOperation,
+};
 use massa_models::output_event::{EventExecutionContext, SCOutputEvent};
 use massa_models::slot::Slot;
+use massa_models::wrapped::WrappedContent;
 use massa_sdk::Client;
 use massa_signature::KeyPair;
 use massa_time::MassaTime;
-use massa_wallet::{Wallet, WalletError};
+use massa_wallet::WalletError;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,11 +21,12 @@ use std::{
     sync::mpsc::Sender,
 };
 
-pub async fn generate_thread_addresses_hashmap(client: &Client) -> anyhow::Result<HashMap<u8, KeyPair>> {
-
+pub async fn generate_thread_addresses_hashmap(
+    client: &Client
+) -> anyhow::Result<HashMap<u8, KeyPair>> {
     let cfg = match client.public.get_status().await {
         Ok(node_status) => node_status,
-        Err(e) => return Err(anyhow::anyhow!(e.to_string()))
+        Err(e) => return Err(anyhow::anyhow!(e.to_string())),
     }
     .config;
 
@@ -31,9 +35,7 @@ pub async fn generate_thread_addresses_hashmap(client: &Client) -> anyhow::Resul
         let keypair = KeyPair::generate();
         let address = Address::from_public_key(&keypair.get_public_key());
         let thread_number = address.get_thread(cfg.thread_count);
-        let a = address.to_string();
         thread_addresses_map.insert(thread_number, keypair);
-        //let b = Address::from_str(&a).unwrap();
     }
     Ok(thread_addresses_map)
 }
@@ -83,19 +85,57 @@ impl MassaClient {
         MassaClient::new_default(testnet_ip, 33035, 33034).await
     }
 
+    pub async fn read_is_player_registered(
+        &self,
+        sc_address: &Address,
+        player_address: &Address,
+    ) -> anyhow::Result<ExecuteReadOnlyResponse> {
+        let res = self
+            .client
+            .public
+            .execute_read_only_call(ReadOnlyCall {
+                max_gas: 70000000,
+                simulated_gas_price: Amount::zero(),
+                target_address: *sc_address,
+                target_function: "isPlayerRegistered".to_string(),
+                parameter: player_address.to_string(),
+                caller_address: None,
+            })
+            .await;
+        match res {
+            Ok(res) => Ok(res),
+            Err(e) => return Err(anyhow::anyhow!(e.to_string())),
+        }
+    }
+
+    pub async fn fetch_events_once(
+        &self,
+        event_filter: EventFilter,
+    ) -> anyhow::Result<Vec<SCOutputEvent>> {
+        let events_res = self
+            .client
+            .public
+            .get_filtered_sc_output_event(event_filter)
+            .await;
+        match events_res {
+            Ok(res) => Ok(res),
+            Err(e) => return Err(anyhow::anyhow!(e.to_string())),
+        }
+    }
+
     pub async fn call_register_player(
         &self,
         sc_address: &Address,
-        player_to_register_address: &Address,
+        player_address: &Address,
         sender_keypair: &KeyPair,
     ) -> anyhow::Result<Vec<OperationId>> {
         send_operation(
             &self.client,
             sender_keypair,
             OperationType::CallSC {
-                target_addr: sc_address.clone(),
+                target_addr: *sc_address,
                 target_func: "registerPlayer".to_owned(),
-                param: player_to_register_address.to_string(),
+                param: player_address.to_string(),
                 max_gas: 70000000,
                 sequential_coins: Amount::zero(),
                 parallel_coins: Amount::zero(),
@@ -113,10 +153,9 @@ async fn send_operation(
     op: OperationType,
     fee: Amount,
 ) -> anyhow::Result<Vec<OperationId>> {
-    
     let cfg = match client.public.get_status().await {
         Ok(node_status) => node_status,
-        Err(e) => return Err(anyhow::anyhow!(e.to_string()))
+        Err(e) => return Err(anyhow::anyhow!(e.to_string())),
     }
     .config;
 
@@ -132,12 +171,14 @@ async fn send_operation(
         expire_period += 1;
     };
 
-    let op = create_operation(Operation {
-        fee,
-        expire_period,
-        op,
-    }, sender_keypair)
-    ?;
+    let op = create_operation(
+        Operation {
+            fee,
+            expire_period,
+            op,
+        },
+        sender_keypair,
+    )?;
 
     match client
         .public
@@ -148,9 +189,7 @@ async fn send_operation(
         }])
         .await
     {
-        Ok(operation_ids) => {
-            Ok(operation_ids)
-        }
+        Ok(operation_ids) => Ok(operation_ids),
         Err(e) => return Err(anyhow::anyhow!(e.to_string())),
     }
 }

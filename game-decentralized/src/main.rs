@@ -13,7 +13,10 @@ use events::{
 };
 use macroquad::prelude::*;
 use macroquad::Window;
-use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult, generate_thread_addresses_hashmap};
+use massa::{
+    generate_thread_addresses_hashmap, poll_contract_events, ExtendedEventFilter, MassaClient,
+    PollResult,
+};
 use massa_models::address::Address;
 use massa_models::api::EventFilter;
 use messages::{ExecutorToGameMessage, GameToExecutorMessage, OnchainUpdateMessage};
@@ -80,7 +83,9 @@ impl Game {
                         );
                         if collectibles_new_state.len() == MAX_COLLECTIBLES_ON_SCREEN {
                             // new correct socket update
-                            self.collectible_states = collectibles_new_state;
+                            self.collectible_states.clear();
+                            self.collectible_states
+                                .extend(collectibles_new_state.into_iter());
                         }
                     }
                     OnchainUpdateMessage::PlayerMovedOnchain(players_moved_onchain) => {
@@ -232,7 +237,42 @@ async fn main() {
         .unwrap();
 
     // generate a thread - addresses map
-    let hm_thread_addresses = generate_thread_addresses_hashmap(&massa_client.client).await.unwrap();
+    let hm_thread_addresses = generate_thread_addresses_hashmap(&massa_client.client)
+        .await
+        .unwrap();
+
+    // check if player is registered
+    let is_player_registered_res = massa_client
+        .read_is_player_registered(
+            &Address::from_str(GAME_SC_ADDRESS).unwrap(),
+            &Address::from_str("A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1").unwrap(),
+        )
+        .await
+        .unwrap();
+    let is_player_registered = is_player_registered_res.output_events[0]
+        .data
+        .parse::<bool>()
+        .ok()
+        .unwrap_or_default();
+
+    // register player
+    /*
+    let executor = hm_thread_addresses.get(&1).unwrap();
+    match massa_client.call_register_player(
+        &Address::from_str(GAME_SC_ADDRESS).unwrap(),
+        &Address::from_str("A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1").unwrap(),
+        executor)
+        .await {
+        Ok(ids) => {
+            println!("IDSSSSSSSSSSSSSSSSSSSSS {:?}", ids);
+        },
+        Err(e) => {
+            println!("ERRRRRRRRRRRRR {:?}", e.to_string());
+        }
+    }
+    */
+
+    // await the
 
     // TODO: check if player is registered or not, evtl. register
     let initial_player_state = PlayerState {
