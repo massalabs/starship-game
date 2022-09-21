@@ -20,6 +20,7 @@ import {Rectangle, _isIntersection} from './rectangle';
 import {PlayerEntity} from './playerEntity';
 import {CollectibleEntity} from './collectibleEntity';
 import {CollectedEntity} from './collectedEntity';
+import {GameEvent} from './gameEvent';
 
 // storage keys
 const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
@@ -36,6 +37,7 @@ const SCREEN_HEIGHT_KEY = 'screen_height_key';
 const TOKEN_ADDRESS_ADDED = 'TOKEN_ADDRESS_ADDED';
 const GAME_OWNER_ADDRESS_ADDED = 'GAME_OWNER_ADDRESS_ADDED';
 const PLAYER_ADDED = 'PLAYER_ADDED';
+const PLAYER_REMOVED = 'PLAYER_REMOVED';
 const PLAYER_MOVED = 'PLAYER_MOVED';
 const GAME_TOKENS_STATE_UPDATED = 'GAME_TOKENS_STATE_UPDATED';
 const TOKEN_COLLECTED = 'TOKEN_COLLECTED';
@@ -147,7 +149,7 @@ export function setScreenWidth(screenWidth: string): void {
   Storage.set(SCREEN_WIDTH_KEY, screenWidth);
 
   // send event
-  generateEvent(`${SCREEN_WIDTH_ADJUSTED}=${screenWidth}`);
+  _generateEvent(`${SCREEN_WIDTH_ADJUSTED}=${screenWidth}`);
 }
 
 /**
@@ -160,7 +162,7 @@ export function setScreenHeight(screenHeight: string): void {
   Storage.set(SCREEN_HEIGHT_KEY, screenHeight);
 
   // send event
-  generateEvent(`${SCREEN_HEIGHT_ADJUSTED}=${screenHeight}`);
+  _generateEvent(`${SCREEN_HEIGHT_ADJUSTED}=${screenHeight}`);
 }
 
 /**
@@ -173,7 +175,7 @@ export function addTokenAddress(tokenAddress: string): void {
   Storage.set(TOKEN_ADDRESS_KEY, tokenAddress.toString());
 
   // send event
-  generateEvent(`${TOKEN_ADDRESS_ADDED}=${tokenAddress.toString()}`);
+  _generateEvent(`${TOKEN_ADDRESS_ADDED}=${tokenAddress.toString()}`);
 }
 
 /**
@@ -199,7 +201,7 @@ export function addGameOwnerAddress(_args: string): void {
   Storage.set(OWNER_ADDRESS_KEY, Context.caller().toByteString());
 
   // send event
-  generateEvent(
+  _generateEvent(
       `${GAME_OWNER_ADDRESS_ADDED}=${Context.caller().toByteString()}`
   );
 }
@@ -249,7 +251,31 @@ export function registerPlayer(address: string): void {
   playerStates.set(addr.toByteString(), serializedPlayerData);
 
   // send event
-  generateEvent(`${PLAYER_ADDED}=${serializedPlayerData}`);
+  _generateEvent(`${PLAYER_ADDED}=${serializedPlayerData}`);
+}
+
+/**
+ * Delete player.
+ *
+ * @param {string} address - Address of the player.
+ */
+export function removePlayer(address: string): void {
+  // read player address
+  const addr = Address.fromByteString(address);
+
+  // TODO: gameOwner to register player ????
+  // TODO: player must also register its thread addresses that he uses to send a message too ?
+
+  // check the player has not been already registered
+  assert(_isPlayerRegistered(addr));
+
+  // mark player as registered
+  registeredPlayers.delete(addr.toByteString());
+  playerStates.delete(addr.toByteString());
+  playerTokens.delete(addr.toByteString());
+
+  // send event
+  _generateEvent(`${PLAYER_REMOVED}=${addr.toByteString()}`);
 }
 
 /**
@@ -280,7 +306,7 @@ export function setAbsCoors(_args: string): void {
   // _checkTokenCollected(args);
 
   // send event
-  generateEvent(`${PLAYER_MOVED}=${serializedPlayerData}`);
+  _generateEvent(`${PLAYER_MOVED}=${serializedPlayerData}`);
 }
 
 /**
@@ -373,7 +399,7 @@ export function moveByInc(_args: string): void {
   _checkTokenCollected(storedPlayerEntity);
 
   // send event
-  generateEvent(`${PLAYER_MOVED}=${serializedPlayerEntity}`);
+  _generateEvent(`${PLAYER_MOVED}=${serializedPlayerEntity}`);
 }
 
 /**
@@ -428,7 +454,7 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
       playerTokens.set(playerPos.address, storedPlayerTokensSerialized);
 
       // generate an event
-      generateEvent(
+      _generateEvent(
           `${TOKEN_COLLECTED}=${playerPos.uuid},${collectibleEntity.uuid}`
       );
     }
@@ -553,10 +579,12 @@ export function asyncCreateCollectibles(_args: string): void {
 
   // save new state
   Storage.set(COLLECTIBLE_TOKENS_STATE_KEY, newState);
+
+  // no need for async msg sending as the contract is sending the msg itself
   generateEvent(`${GAME_TOKENS_STATE_UPDATED}=${newState}`);
 
   // emit wakeup message
-  let nextThread = curThread + NEW_COLLECTIBLES_GENERATION_IN_THREADS; // + 1
+  let nextThread = 31 as u8; // choose max. delay
   let nextPeriod = curPeriod;
   if (nextThread >= THREADS) {
     ++nextPeriod;
@@ -643,8 +671,55 @@ function _randomInRange(range: f32): f32 {
   if (random > 0) {
     return <f32>Math.abs(<f64>mod);
   } else {
-    return <f32>Math.abs(<f64>mod) * -1.0;
+    return <f32>Math.abs(<f64>mod) * 1.0; // <f32>Math.abs(<f64>mod) * -1.0 depending on the axis
   }
 }
 
+/**
+ * Player collects a token.
+ *
+ * @param {string} data - Self-calling function for generating collectibles.
+ */
+export function _sendGameEvent(data: string): void {
+  // check that the caller is the contract itself
+  assert(Context.callee().equals(Context.caller()));
+
+  const gameEvent: GameEvent = {
+    data,
+    time: env.env.time(), // unix time in milliseconds
+  } as GameEvent;
+  generateEvent(`${gameEvent.serializeToString()}`);
+}
+
+/**
+ * Player collects a token.
+ *
+ * @param {string} data - Self-calling function for generating collectibles.
+ */
+function _generateEvent(data: string): void {
+  const curThread = currentThread();
+  const curPeriod = currentPeriod();
+
+  let nextThread = curThread + 1;
+  let nextPeriod = curPeriod;
+  if (nextThread >= THREADS) {
+    ++nextPeriod;
+    nextThread = 0;
+  }
+  // sc address
+  const curAddr = Context.callee();
+
+  sendMessage(
+      curAddr,
+      '_sendGameEvent',
+      nextPeriod, // validityStartPeriod
+      nextThread, // validityStartThread
+      nextPeriod + 5, // validityEndPeriod
+      nextThread, // validityEndThread
+      70000000,
+      0,
+      0,
+      data
+  );
+}
 

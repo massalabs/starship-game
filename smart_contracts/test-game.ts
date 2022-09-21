@@ -17,9 +17,7 @@ import { IDatastoreEntryInput,
     IProvider,
     ProviderType} from "@massalabs/massa-web3";
 
-const scAddress = "A1DztVV6kfTPsZTtE18wrj9BF1ff3vkzFBiyLtJw2nxvrtf85js";
-const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
-const gameOwnerAddress = "A12A2NAA3tTs9dW2t3MnoxpbADdLV7gWE9Le9BygsbTgjcFmMj4o";
+
 
 interface IGameEntity {
     uuid: string;
@@ -54,55 +52,9 @@ interface IGameEntity {
         ];
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        //====================================================
-        
-        /*
-        console.log(`Filtering for sc events....`);
-        const eventsFilter = {
-            start: null,
-            end: null,
-            original_operation_id: null, //"iYuaiRHtq8EydqdtprLrVmswSs1e6FiNqhsrm1dpGFCgM2APn",
-            original_caller_address: null,
-            emitter_address: scAddress,
-            eventsNameRegex: null, //"PLAYER_ADDED",
-            is_final: true
-        } as IEventRegexFilter;
-                
-        
-        const eventPoller = EventPoller.startEventPoller(
-            eventsFilter,
-            1000,
-            web3Client
-        );
-        eventPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
-            const element = events[events.length - 1];
-            //console.log("SLOT", element.context.slot);
-            events.forEach((e) => console.log("DATA", e.data.substring(0, 30)));
-                  
-        });
-        eventPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
-        */
-        
-        
-
-        /*
-        //const x = await EventPoller.getEventsOnce(eventsFilter, web3Client);
-        //console.log(x);
-        */
-
-        /*
-        await EventPoller.startEventsPollingAsync(
-            eventsFilter,
-            1000,
-            web3Client,
-            (events) => {console.log("EVENTS:" , events.length)},
-            (ex) => {console.log("ERROR" , ex)});
-        */
-
-        //====================================================
+        const scAddress = "A12UKBNkzj3gGjSytoWMZ3S2WdGzpDxTqYyUo3zHRngLmfRTBrPb";
 
         // call sc function
-        /*
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -112,39 +64,11 @@ interface IGameEntity {
             sequentialCoins: 0,
             targetAddress: scAddress,
             functionName: "registerPlayer", //playerAddress
-            parameter: "A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu",
+            parameter: "A12A2NAA3tTs9dW2t3MnoxpbADdLV7gWE9Le9BygsbTgjcFmMj4o",
         } as ICallData);
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
-        */
-
-        console.log(`Filtering for sc events....`);
-        const eventsFilter = {
-            start: null,
-            end: null,
-            original_operation_id: null, //"EGTXVsPFt2RY4iB3GXtNzqWHTej1pdcENNdCB2KrSfvamGmNy",
-            original_caller_address: null, //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT",
-            emitter_address: null, //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT", //"A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT", //scAddress,
-            eventsNameRegex: null, //"PLAYER_ADDED",
-            is_final: true
-        } as IEventRegexFilter;
-                
         
-        const eventPoller = EventPoller.startEventPoller(
-            eventsFilter,
-            1000,
-            web3Client
-        );
-        eventPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
-            const element = events[events.length - 1];
-            //console.log("SLOT", element.context.slot);
-            events.filter((e) => {
-                return e.data.includes("PLAYER_ADDED=");
-            })
-            .forEach((e) => console.log("DATA", e.data));
-                  
-        });
-        eventPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
         
 
         // read sc state
@@ -162,10 +86,8 @@ interface IGameEntity {
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         */
 
-
-
         //const status: EOperationStatus = await web3Client.smartContracts().getOperationStatus("2oiSymQNLUYw7AWxLsCX6qo7SUk9v8Q9ivkN68YsEdQ5aBfXnf");
-        //console.log("STATUSSSS ", status);
+        //console.log("Status ", status);
 
         // get sc storage data
         /*

@@ -19,6 +19,7 @@ pub enum GameToExecutorMessage {
 pub enum OnchainUpdateMessage {
     CollectiblesNewState(Vec<CollectibleToken>),
     PlayerMovedOnchain(Vec<PlayerEntityOnchain>),
+    PlayerRemovedOnchain(Vec<String>),
     PlayerAddedOnchain(Vec<PlayerEntityOnchain>),
     TokenCollectedOnchain(Vec<(String, String)>),
 }

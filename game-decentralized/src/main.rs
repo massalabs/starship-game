@@ -1,11 +1,16 @@
 mod entities;
+mod events;
 mod massa;
 mod messages;
 mod near;
 mod utils;
 
-use entities::PlayerEntityOnchain;
 use entities::{CollectibleToken, PlayerState};
+use entities::{GameEvent, PlayerEntityOnchain};
+use events::{
+    parse_added_players_events, parse_collectible_events, parse_players_movement_events,
+    parse_removed_players_events,
+};
 use macroquad::prelude::*;
 use macroquad::Window;
 use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult};
@@ -24,8 +29,9 @@ use std::thread;
 const GAME_TOKENS_STATE_UPDATED_EVENT_KEY: &'static str = "GAME_TOKENS_STATE_UPDATED";
 const PLAYER_MOVED_EVENT_KEY: &'static str = "PLAYER_MOVED";
 const PLAYER_ADDED_EVENT_KEY: &'static str = "PLAYER_ADDED";
+const PLAYER_REMOVED_EVENT_KEY: &'static str = "PLAYER_REMOVED";
 const TOKEN_COLLECTED_EVENT_KEY: &'static str = "TOKEN_COLLECTED";
-const GAME_SC_ADDRESS: &'static str = "A1DztVV6kfTPsZTtE18wrj9BF1ff3vkzFBiyLtJw2nxvrtf85js";
+const GAME_SC_ADDRESS: &'static str = "A12UKBNkzj3gGjSytoWMZ3S2WdGzpDxTqYyUo3zHRngLmfRTBrPb";
 
 const ROT_SPEED: f32 = 0.015;
 const LIN_SPEED: f32 = 1.0;
@@ -82,6 +88,14 @@ impl Game {
                             info!(
                                 "Message:: Players moved onchain {:?}",
                                 players_moved_onchain.len()
+                            );
+                        }
+                    }
+                    OnchainUpdateMessage::PlayerRemovedOnchain(players_addresses) => {
+                        if players_addresses.len() > 0 {
+                            info!(
+                                "Message:: Players removed onchain {:?}",
+                                players_addresses.len()
                             );
                         }
                     }
@@ -206,7 +220,7 @@ async fn main() {
         loop {
             let msg = ch_game_executor_rx.try_recv().ok();
             if let Some(msg) = msg {
-                //println!("MSG {:?}", msg);
+                //println!("PLAYER MOVED {:?}", msg);
             }
         }
     });
@@ -234,6 +248,7 @@ async fn main() {
             GAME_TOKENS_STATE_UPDATED_EVENT_KEY.into(),
             PLAYER_MOVED_EVENT_KEY.into(),
             PLAYER_ADDED_EVENT_KEY.into(),
+            PLAYER_REMOVED_EVENT_KEY.into(),
             TOKEN_COLLECTED_EVENT_KEY.into(),
         ]), // enum all events we are interested in collecting
         event_filter: EventFilter {
@@ -323,80 +338,32 @@ async fn run_game(
                 let mut cummulative_updates: Vec<OnchainUpdateMessage> = vec![];
 
                 // =================== collectible tokens update ===================
-                let collectible_token_update = poll_result
-                    .iter()
-                    .filter_map(|event| {
-                        if event.data.contains(GAME_TOKENS_STATE_UPDATED_EVENT_KEY) {
-                            let event_parts: Vec<&str> = event.data.split("=").collect();
-                            let event_data = event_parts[1].to_owned();
-                            let event_parts: Vec<&str> = event_data.split("@").collect();
-
-                            let tokens = event_parts
-                                .iter()
-                                .map(|&e| {
-                                    let token =
-                                        serde_json::from_slice::<CollectibleToken>(e.as_bytes());
-                                    token
-                                })
-                                .collect::<Result<Vec<CollectibleToken>, _>>()
-                                .ok();
-
-                            return tokens;
-                        }
-                        None
-                    })
-                    .flatten()
-                    .collect::<Vec<CollectibleToken>>();
-
+                let collectible_token_update = parse_collectible_events(&poll_result);
                 if !collectible_token_update.is_empty() {
                     cummulative_updates.push(OnchainUpdateMessage::CollectiblesNewState(
                         collectible_token_update,
                     ));
                 }
-
                 // =================== players moved ===================
-                let players_moved_update = poll_result
-                    .iter()
-                    .filter_map(|event| {
-                        if event.data.contains(PLAYER_MOVED_EVENT_KEY) {
-                            let event_parts: Vec<&str> = event.data.split("=").collect();
-                            let event_data = event_parts[1].to_owned();
-                            let player_moved = serde_json::from_slice::<PlayerEntityOnchain>(
-                                event_data.as_bytes(),
-                            )
-                            .ok();
-                            return player_moved;
-                        }
-                        None
-                    })
-                    .collect::<Vec<PlayerEntityOnchain>>();
-
+                let players_moved_update = parse_players_movement_events(&poll_result);
                 if !players_moved_update.is_empty() {
                     cummulative_updates.push(OnchainUpdateMessage::PlayerMovedOnchain(
                         players_moved_update,
                     ));
                 }
-
                 // =================== players added ===================
-                let players_added_update = poll_result
-                    .iter()
-                    .filter_map(|event| {
-                        if event.data.contains(PLAYER_ADDED_EVENT_KEY) {
-                            let event_parts: Vec<&str> = event.data.split("=").collect();
-                            let event_data = event_parts[1].to_owned();
-                            let player_added = serde_json::from_slice::<PlayerEntityOnchain>(
-                                event_data.as_bytes(),
-                            )
-                            .ok();
-                            return player_added;
-                        }
-                        None
-                    })
-                    .collect::<Vec<PlayerEntityOnchain>>();
-
+                let players_added_update = parse_added_players_events(&poll_result);
                 if !players_added_update.is_empty() {
                     cummulative_updates.push(OnchainUpdateMessage::PlayerAddedOnchain(
                         players_added_update,
+                    ));
+                }
+                // =================== players removed ===================
+                let players_removed_update = parse_removed_players_events(&poll_result);
+
+                if !players_removed_update.is_empty() {
+                    cummulative_updates.push(OnchainUpdateMessage::PlayerRemovedOnchain(
+                        players_removed_update,
                     ));
                 }
 

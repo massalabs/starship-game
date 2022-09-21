@@ -2,6 +2,12 @@ use macroquad::prelude::Vec2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameEvent {
+    pub data: String,
+    pub time: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectibleToken {
     pub uuid: String,
     pub x: f32,
