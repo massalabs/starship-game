@@ -1,9 +1,15 @@
 use massa_models::address::Address;
-use massa_models::api::EventFilter;
+use massa_models::amount::Amount;
+use massa_models::api::{EventFilter, OperationInput};
+use massa_models::error::ModelsError;
+use massa_models::operation::{OperationType, Operation, OperationId, OperationSerializer, WrappedOperation};
+use massa_models::wrapped::WrappedContent;
 use massa_models::output_event::{EventExecutionContext, SCOutputEvent};
 use massa_models::slot::Slot;
 use massa_sdk::Client;
 use massa_signature::KeyPair;
+use massa_time::MassaTime;
+use massa_wallet::{Wallet, WalletError};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,19 +18,24 @@ use std::{
     sync::mpsc::Sender,
 };
 
-pub const THREAD_COUNT: u8 = 32;
+pub async fn generate_thread_addresses_hashmap(client: &Client) -> anyhow::Result<HashMap<u8, KeyPair>> {
 
-pub fn generate_thread_addresses_hashmap() -> HashMap<u8, KeyPair> {
+    let cfg = match client.public.get_status().await {
+        Ok(node_status) => node_status,
+        Err(e) => return Err(anyhow::anyhow!(e.to_string()))
+    }
+    .config;
+
     let mut thread_addresses_map: HashMap<u8, KeyPair> = HashMap::new();
-    while thread_addresses_map.keys().len() != THREAD_COUNT as usize {
+    while thread_addresses_map.keys().len() != cfg.thread_count as usize {
         let keypair = KeyPair::generate();
         let address = Address::from_public_key(&keypair.get_public_key());
-        let thread_number = address.get_thread(THREAD_COUNT);
+        let thread_number = address.get_thread(cfg.thread_count);
         let a = address.to_string();
         thread_addresses_map.insert(thread_number, keypair);
         //let b = Address::from_str(&a).unwrap();
     }
-    thread_addresses_map
+    Ok(thread_addresses_map)
 }
 
 pub fn sort_by_thread_and_period(
@@ -72,11 +83,116 @@ impl MassaClient {
         MassaClient::new_default(testnet_ip, 33035, 33034).await
     }
 
-    pub async fn register_player(
+    pub async fn call_register_player(
         &self,
-        player_address: &str,
-    ) {
+        sc_address: &Address,
+        player_to_register_address: &Address,
+        sender_keypair: &KeyPair,
+    ) -> anyhow::Result<Vec<OperationId>> {
+        send_operation(
+            &self.client,
+            sender_keypair,
+            OperationType::CallSC {
+                target_addr: sc_address.clone(),
+                target_func: "registerPlayer".to_owned(),
+                param: player_to_register_address.to_string(),
+                max_gas: 70000000,
+                sequential_coins: Amount::zero(),
+                parallel_coins: Amount::zero(),
+                gas_price: Amount::zero(),
+            },
+            Amount::zero(),
+        )
+        .await
     }
+}
+
+async fn send_operation(
+    client: &Client,
+    sender_keypair: &KeyPair,
+    op: OperationType,
+    fee: Amount,
+) -> anyhow::Result<Vec<OperationId>> {
+    
+    let cfg = match client.public.get_status().await {
+        Ok(node_status) => node_status,
+        Err(e) => return Err(anyhow::anyhow!(e.to_string()))
+    }
+    .config;
+
+    let address = Address::from_public_key(&sender_keypair.get_public_key());
+
+    let slot = get_current_latest_block_slot(cfg.thread_count, cfg.t0, cfg.genesis_timestamp, 0)? // clock compensation is zero
+        .unwrap_or_else(|| Slot::new(0, 0));
+    let mut expire_period = slot.period + cfg.operation_validity_periods;
+
+    let thread_number = address.get_thread(cfg.thread_count);
+
+    if slot.thread >= thread_number {
+        expire_period += 1;
+    };
+
+    let op = create_operation(Operation {
+        fee,
+        expire_period,
+        op,
+    }, sender_keypair)
+    ?;
+
+    match client
+        .public
+        .send_operations(vec![OperationInput {
+            creator_public_key: op.creator_public_key,
+            serialized_content: op.serialized_data,
+            signature: op.signature,
+        }])
+        .await
+    {
+        Ok(operation_ids) => {
+            Ok(operation_ids)
+        }
+        Err(e) => return Err(anyhow::anyhow!(e.to_string())),
+    }
+}
+
+fn create_operation(
+    content: Operation,
+    sender_keypair: &KeyPair,
+) -> Result<WrappedOperation, WalletError> {
+    Ok(Operation::new_wrapped(content, OperationSerializer::new(), sender_keypair).unwrap())
+}
+
+fn get_current_latest_block_slot(
+    thread_count: u8,
+    t0: MassaTime,
+    genesis_timestamp: MassaTime,
+    clock_compensation: i64,
+) -> Result<Option<Slot>, ModelsError> {
+    get_latest_block_slot_at_timestamp(
+        thread_count,
+        t0,
+        genesis_timestamp,
+        MassaTime::now(clock_compensation)?,
+    )
+}
+
+fn get_latest_block_slot_at_timestamp(
+    thread_count: u8,
+    t0: MassaTime,
+    genesis_timestamp: MassaTime,
+    timestamp: MassaTime,
+) -> Result<Option<Slot>, ModelsError> {
+    if let Ok(time_since_genesis) = timestamp.checked_sub(genesis_timestamp) {
+        let thread: u8 = time_since_genesis
+            .checked_rem_time(t0)?
+            .checked_div_time(t0.checked_div_u64(thread_count as u64)?)?
+            as u8;
+        return Ok(Some(Slot::new(
+            time_since_genesis.checked_div_time(t0)?,
+            thread,
+        )));
+    }
+    Ok(None)
 }
 
 pub async fn poll_contract_events(

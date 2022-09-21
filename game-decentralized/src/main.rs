@@ -13,7 +13,7 @@ use events::{
 };
 use macroquad::prelude::*;
 use macroquad::Window;
-use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult};
+use massa::{poll_contract_events, ExtendedEventFilter, MassaClient, PollResult, generate_thread_addresses_hashmap};
 use massa_models::address::Address;
 use massa_models::api::EventFilter;
 use messages::{ExecutorToGameMessage, GameToExecutorMessage, OnchainUpdateMessage};
@@ -230,6 +230,9 @@ async fn main() {
     ch_executor_game_tx
         .send(ExecutorToGameMessage::MassaConnected)
         .unwrap();
+
+    // generate a thread - addresses map
+    let hm_thread_addresses = generate_thread_addresses_hashmap(&massa_client.client).await.unwrap();
 
     // TODO: check if player is registered or not, evtl. register
     let initial_player_state = PlayerState {

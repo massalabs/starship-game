@@ -1,5 +1,6 @@
-use massa_models::output_event::SCOutputEvent;
-use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use massa_models::{output_event::SCOutputEvent, address::Address};
 
 use crate::{
     entities::{CollectibleToken, GameEvent, PlayerEntityOnchain},
@@ -98,7 +99,7 @@ pub fn parse_added_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Playe
     players_added_update
 }
 
-pub fn parse_removed_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<String> {
+pub fn parse_removed_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Address> {
     let players_removed_update = poll_result
         .iter()
         .filter_map(|event| {
@@ -110,7 +111,10 @@ pub fn parse_removed_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Str
                         let event_serialized_data = event_parts[1].to_owned();
 
                         let player_removed =
-                            serde_json::from_slice::<String>(event_serialized_data.as_bytes()).ok();
+                            serde_json::from_slice::<String>(event_serialized_data.as_bytes())
+                            .ok()
+                            .map(|s| Address::from_str(s.as_str()).ok())
+                            .flatten();
 
                         player_removed
                     })
@@ -120,7 +124,7 @@ pub fn parse_removed_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Str
             }
             None
         })
-        .collect::<Vec<String>>();
+        .collect::<Vec<Address>>();
 
     players_removed_update
 }

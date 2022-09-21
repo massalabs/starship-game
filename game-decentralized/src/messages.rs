@@ -1,3 +1,5 @@
+use massa_models::address::Address;
+
 use crate::entities::{CollectibleToken, PlayerEntityOnchain, PlayerState};
 
 #[derive(Debug, Clone)]
@@ -19,7 +21,7 @@ pub enum GameToExecutorMessage {
 pub enum OnchainUpdateMessage {
     CollectiblesNewState(Vec<CollectibleToken>),
     PlayerMovedOnchain(Vec<PlayerEntityOnchain>),
-    PlayerRemovedOnchain(Vec<String>),
+    PlayerRemovedOnchain(Vec<Address>),
     PlayerAddedOnchain(Vec<PlayerEntityOnchain>),
     TokenCollectedOnchain(Vec<(String, String)>),
 }
