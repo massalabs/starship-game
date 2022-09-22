@@ -39,15 +39,14 @@ pub async fn generate_thread_addresses_hashmap(
     let cfg = match client.public.get_status().await {
         Ok(node_status) => node_status,
         Err(e) => return Err(anyhow::anyhow!(e.to_string())),
-    }
-    .config;
+    };
 
     let mut thread_addresses_map: HashMap<u8, KeyPair> = HashMap::new();
-    while thread_addresses_map.keys().len() != cfg.thread_count as usize {
-        let keyPair = KeyPair::generate();
-        let address = Address::from_public_key(&keyPair.get_public_key());
-        let thread_number = address.get_thread(cfg.thread_count);
-        thread_addresses_map.insert(thread_number, keyPair);
+    while thread_addresses_map.keys().len() != cfg.config.thread_count as usize {
+        let key_pair = KeyPair::generate();
+        let address = Address::from_public_key(&key_pair.get_public_key());
+        let thread_number = address.get_thread(cfg.config.thread_count);
+        thread_addresses_map.insert(thread_number, key_pair);
     }
     Ok(thread_addresses_map)
 }

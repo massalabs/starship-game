@@ -51,6 +51,7 @@ pub struct Game {
     pub quit: bool,
     pub player_texture: Texture2D,
     pub collectible_texture: Texture2D,
+    pub background_texture: Texture2D,
     pub player_state: PlayerState,
     pub players_remote_states: Vec<PlayerState>,
     pub collectible_states: Vec<CollectibleToken>,
@@ -63,12 +64,14 @@ impl Game {
     ) -> Self {
         let player_texture = load_texture("assets/plane.png").await.unwrap();
         let collectible_texture = load_texture("assets/massa-token-small.png").await.unwrap();
+        let background_texture = load_texture("assets/galaxy.png").await.unwrap();
         info!("Player and Collectible Textures loaded");
 
         Self {
             quit: false,
             player_texture,
             collectible_texture,
+            background_texture,
             player_state: initial_player_state,
             players_remote_states: Default::default(),
             collectible_states: initial_collectible_states,
@@ -172,18 +175,26 @@ impl Game {
         // white screen
         clear_background(color_u8!(211, 198, 232, 255));
 
+        draw_texture_ex(
+            self.background_texture,
+            0.0,
+            0.0,
+            WHITE,
+            DrawTextureParams {
+                rotation: 0.0,
+                ..Default::default()
+            },
+        );
+
         // draw title
-        draw_text("Collect Massa Tokens", 600f32, 20f32, 20f32, BLUE);
+        draw_text("Collect Massa Tokens", 800f32, 20f32, 20f32, WHITE);
         draw_text(
             "L/R - rotate, UP - move, SPACE - accelerate",
             0f32,
-            550f32,
+            450f32,
             20f32,
-            RED,
+            WHITE,
         );
-
-        // draw the black obstacle box
-        draw_box(Vec2::new(400f32, 200f32), Vec2::new(50f32, 20f32));
 
         // draw the collectibles state
         for collectible_state in self.collectible_states.iter() {
@@ -272,6 +283,8 @@ async fn main() {
     */
 
     // TODO: await the tx status
+ 
+    // TODO: get all currently connected players from 1) chain load_online_players() 2) load_tokens_state()
 
     // TODO: check if player is registered or not, evtl. register
     let initial_player_state = PlayerState {
@@ -364,6 +377,9 @@ async fn main() {
             Conf {
                 sample_count: 4,
                 window_title: "Starship".to_string(),
+                window_width: 1000,
+                window_height: 500,
+                fullscreen: false,
                 high_dpi: true,
                 ..Default::default()
             },
