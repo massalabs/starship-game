@@ -6,7 +6,7 @@ mod near;
 mod utils;
 
 use entities::{CollectibleToken, PlayerState};
-use entities::{GameEvent, PlayerEntityOnchain};
+use entities::{GameEventOnchain, PlayerEntityOnchain};
 use events::{
     parse_added_players_events, parse_collectible_events, parse_players_movement_events,
     parse_removed_players_events,
@@ -341,7 +341,7 @@ async fn main() {
 async fn run_game(
     initial_player_state: PlayerState,
     initial_collectible_states: Vec<CollectibleToken>,
-    chain_rx: Receiver<PollResult>,
+    ch_blockchain_game_rx: Receiver<PollResult>,
     ch_executor_game_rx: Receiver<ExecutorToGameMessage>,
     ch_game_executor_tx: Sender<GameToExecutorMessage>,
 ) {
@@ -374,7 +374,7 @@ async fn run_game(
         }
 
         // receive and process chain messages
-        let chain_msg = chain_rx.try_recv().ok();
+        let chain_msg = ch_blockchain_game_rx.try_recv().ok();
 
         let onchain_updates = chain_msg.and_then(|poll_result| match poll_result {
             PollResult::Events(poll_result) => {

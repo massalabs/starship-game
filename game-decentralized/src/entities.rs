@@ -2,7 +2,7 @@ use macroquad::prelude::Vec2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GameEvent {
+pub struct GameEventOnchain {
     pub data: String,
     pub time: u64,
 }

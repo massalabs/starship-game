@@ -3,7 +3,7 @@ use std::str::FromStr;
 use massa_models::{address::Address, output_event::SCOutputEvent};
 
 use crate::{
-    entities::{CollectibleToken, GameEvent, PlayerEntityOnchain},
+    entities::{CollectibleToken, GameEventOnchain, PlayerEntityOnchain},
     GAME_TOKENS_STATE_UPDATED_EVENT_KEY, PLAYER_ADDED_EVENT_KEY, PLAYER_MOVED_EVENT_KEY,
     PLAYER_REMOVED_EVENT_KEY,
 };
@@ -43,7 +43,7 @@ pub fn parse_players_movement_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Pl
         .filter_map(|event| {
             if event.data.contains(PLAYER_MOVED_EVENT_KEY) {
                 let players_moved_update =
-                    serde_json::from_slice::<GameEvent>(event.data.as_bytes())
+                    serde_json::from_slice::<GameEventOnchain>(event.data.as_bytes())
                         .ok()
                         .map(|game_event| {
                             let event_parts: Vec<&str> = game_event.data.split("=").collect();
@@ -74,7 +74,7 @@ pub fn parse_added_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Playe
         .filter_map(|event| {
             if event.data.contains(PLAYER_ADDED_EVENT_KEY) {
                 let players_added_update =
-                    serde_json::from_slice::<GameEvent>(event.data.as_bytes())
+                    serde_json::from_slice::<GameEventOnchain>(event.data.as_bytes())
                         .ok()
                         .map(|game_event| {
                             let event_parts: Vec<&str> = game_event.data.split("=").collect();
@@ -104,21 +104,22 @@ pub fn parse_removed_players_events(poll_result: &Vec<SCOutputEvent>) -> Vec<Add
         .iter()
         .filter_map(|event| {
             if event.data.contains(PLAYER_REMOVED_EVENT_KEY) {
-                let player_removed = serde_json::from_slice::<GameEvent>(event.data.as_bytes())
-                    .ok()
-                    .map(|game_event| {
-                        let event_parts: Vec<&str> = game_event.data.split("=").collect();
-                        let event_serialized_data = event_parts[1].to_owned();
+                let player_removed =
+                    serde_json::from_slice::<GameEventOnchain>(event.data.as_bytes())
+                        .ok()
+                        .map(|game_event| {
+                            let event_parts: Vec<&str> = game_event.data.split("=").collect();
+                            let event_serialized_data = event_parts[1].to_owned();
 
-                        let player_removed =
-                            serde_json::from_slice::<String>(event_serialized_data.as_bytes())
-                                .ok()
-                                .map(|s| Address::from_str(s.as_str()).ok())
-                                .flatten();
+                            let player_removed =
+                                serde_json::from_slice::<String>(event_serialized_data.as_bytes())
+                                    .ok()
+                                    .map(|s| Address::from_str(s.as_str()).ok())
+                                    .flatten();
 
-                        player_removed
-                    })
-                    .flatten();
+                            player_removed
+                        })
+                        .flatten();
 
                 return player_removed;
             }
