@@ -16,6 +16,7 @@ use massa_wallet::WalletError;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{
     net::{IpAddr, Ipv4Addr},
     sync::mpsc::Sender,
@@ -323,6 +324,7 @@ pub async fn poll_contract_events(
                     tx.send(PollResult::Error(e.to_string())).unwrap();
                 }
             }
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
     });
 }
