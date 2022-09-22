@@ -29,12 +29,18 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread;
 
+use crate::massa::get_thread_to_execute_from;
+
+lazy_static::lazy_static! {
+    pub static ref GAME_SC_ADDRESS: Address = Address::from_str("A12ZufE7mGz6RLt3PCN9dsbLE2bK2kvj8mnDE9ibdCycWPcg3C4z").unwrap();
+    pub static ref PLAYER_ADDRESS: Address = Address::from_str("A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT").unwrap();
+}
+
 const GAME_TOKENS_STATE_UPDATED_EVENT_KEY: &'static str = "GAME_TOKENS_STATE_UPDATED";
 const PLAYER_MOVED_EVENT_KEY: &'static str = "PLAYER_MOVED";
 const PLAYER_ADDED_EVENT_KEY: &'static str = "PLAYER_ADDED";
 const PLAYER_REMOVED_EVENT_KEY: &'static str = "PLAYER_REMOVED";
 const TOKEN_COLLECTED_EVENT_KEY: &'static str = "TOKEN_COLLECTED";
-const GAME_SC_ADDRESS: &'static str = "A12UKBNkzj3gGjSytoWMZ3S2WdGzpDxTqYyUo3zHRngLmfRTBrPb";
 
 const ROT_SPEED: f32 = 0.015;
 const LIN_SPEED: f32 = 1.0;
@@ -46,6 +52,7 @@ pub struct Game {
     pub player_texture: Texture2D,
     pub collectible_texture: Texture2D,
     pub player_state: PlayerState,
+    pub players_remote_states: Vec<PlayerState>,
     pub collectible_states: Vec<CollectibleToken>,
 }
 
@@ -63,6 +70,7 @@ impl Game {
             player_texture,
             collectible_texture,
             player_state: initial_player_state,
+            players_remote_states: Default::default(),
             collectible_states: initial_collectible_states,
         }
     }
@@ -165,7 +173,7 @@ impl Game {
         clear_background(color_u8!(211, 198, 232, 255));
 
         // draw title
-        draw_text("Collect Massa Tokens", 600f32, 100f32, 20f32, BLUE);
+        draw_text("Collect Massa Tokens", 600f32, 20f32, 20f32, BLUE);
         draw_text(
             "L/R - rotate, UP - move, SPACE - accelerate",
             0f32,
@@ -217,36 +225,27 @@ async fn main() {
     // create a channel to communicate between game --> main executor
     let (ch_game_executor_tx, ch_game_executor_rx) = channel::<GameToExecutorMessage>();
 
-    // spawn a tokio thread receiving updates from within the game
-    // TODO: kill the thread upon game exit
-    // TODO: make this a tokio thread
-    tokio::spawn(async move {
-        println!("game_executor_receiver started");
-        loop {
-            let msg = ch_game_executor_rx.try_recv().ok();
-            if let Some(msg) = msg {
-                //println!("PLAYER MOVED {:?}", msg);
-            }
-        }
-    });
-
     // create massa rpc client
     let massa_client = MassaClient::new_testnet().await;
+    let massa_client = Arc::new(massa_client);
+    let massa_polling_client = Arc::clone(&massa_client);
+    let massa_sending_client = Arc::clone(&massa_client);
+
     ch_executor_game_tx
         .send(ExecutorToGameMessage::MassaConnected)
         .unwrap();
 
     // generate a thread - addresses map
-    let hm_thread_addresses = generate_thread_addresses_hashmap(&massa_client.client)
-        .await
-        .unwrap();
+    let map_thread_addresses = Arc::new(
+        generate_thread_addresses_hashmap(&massa_sending_client.client)
+            .await
+            .unwrap(),
+    );
+    let map_thread_addresses_executor = Arc::clone(&map_thread_addresses);
 
     // check if player is registered
     let is_player_registered_res = massa_client
-        .read_is_player_registered(
-            &Address::from_str(GAME_SC_ADDRESS).unwrap(),
-            &Address::from_str("A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1").unwrap(),
-        )
+        .read_is_player_registered(&GAME_SC_ADDRESS, &PLAYER_ADDRESS)
         .await
         .unwrap();
     let is_player_registered = is_player_registered_res.output_events[0]
@@ -259,26 +258,29 @@ async fn main() {
     /*
     let executor = hm_thread_addresses.get(&1).unwrap();
     match massa_client.call_register_player(
-        &Address::from_str(GAME_SC_ADDRESS).unwrap(),
-        &Address::from_str("A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1").unwrap(),
+        &*GAME_SC_ADDRESS,
+        &*PLAYER_ADDRESS,
         executor)
         .await {
         Ok(ids) => {
-            println!("IDSSSSSSSSSSSSSSSSSSSSS {:?}", ids);
+            println!("Player registered op id {:?}", ids);
         },
         Err(e) => {
-            println!("ERRRRRRRRRRRRR {:?}", e.to_string());
+            println!("Error registering player {:?}", e.to_string());
         }
     }
     */
 
-    // await the
+    // TODO: await the tx status
 
     // TODO: check if player is registered or not, evtl. register
     let initial_player_state = PlayerState {
         id: "uuid-1234".to_string(),
+        address: *GAME_SC_ADDRESS,
         position: Vec2::new(0f32, 0f32),
-        rotation: 0f32,
+        rotation: 90f32,
+        cbox: 10.0f32,
+        tokensCollected: 0,
     };
     let initial_collectible_states = Vec::new();
     ch_executor_game_tx
@@ -297,18 +299,63 @@ async fn main() {
         event_filter: EventFilter {
             start: None,
             end: None,
-            emitter_address: Some(Address::from_str(GAME_SC_ADDRESS).unwrap()), // game address
+            emitter_address: Some(*GAME_SC_ADDRESS), // game address
             original_caller_address: None,
             original_operation_id: None,
             is_final: Some(true), // poll only final events
         },
     };
+
     // start polling massa sc for events in a separate tokio thread
-    let massa_client = Arc::new(massa_client);
-    poll_contract_events(massa_client, event_extended_filter, ch_blockchain_game_tx).await;
+    poll_contract_events(
+        massa_polling_client,
+        event_extended_filter,
+        ch_blockchain_game_tx,
+    )
+    .await;
     ch_executor_game_tx
         .send(ExecutorToGameMessage::ServerStreamingStarted)
         .unwrap();
+
+    // spawn a tokio thread receiving updates from within the game
+    // TODO: kill the thread upon game exit
+    tokio::spawn(async move {
+        println!("game_executor_receiver started");
+        loop {
+            let msg = ch_game_executor_rx.try_recv().ok();
+            if let Some(msg) = msg {
+                match msg {
+                    GameToExecutorMessage::PlayerVirtuallyMoved(player_pos) => {
+                        //println!("PLAYER MOVED {:?}", msg);
+                        let next_thread_to_exec_from =
+                            get_thread_to_execute_from(&massa_sending_client.client)
+                                .await
+                                .unwrap();
+                        let executor = map_thread_addresses_executor
+                            .get(&next_thread_to_exec_from)
+                            .unwrap();
+                        /*
+                        match massa_sending_client.call_set_player_pos(
+                            &*GAME_SC_ADDRESS,
+                            &*PLAYER_ADDRESS,
+                            executor)
+                            .await {
+                            Ok(ids) => {
+                                println!("Operation Id {:?}", ids);
+                            },
+                            Err(e) => {
+                                println!("Error setting player position {:?}", e.to_string());
+                            }
+                        }
+                        */
+                    }
+                    GameToExecutorMessage::Quit => {
+                        println!("Player Quit");
+                    }
+                }
+            }
+        }
+    });
 
     // spawn the game in a separate none-tokio thread
     // TODO: kill the thread upon game exit

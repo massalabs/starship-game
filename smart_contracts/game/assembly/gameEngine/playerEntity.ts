@@ -8,6 +8,7 @@ export class PlayerEntity {
   address: string = '';
   x: f32 = 0.0;
   y: f32 = 0.0;
+  rot: f32 = 0.0;
   cbox: f32 = 0.0;
   tokensCollected: u64 = 0;
 

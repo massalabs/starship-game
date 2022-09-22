@@ -244,6 +244,7 @@ export function registerPlayer(address: string): void {
     address: addr.toByteString(),
     x: 0.0,
     y: 0.0,
+    rot: 90.0,
     cbox: PLAYER_BOUNDING_BOX,
     tokensCollected: 0,
   } as PlayerEntity;
@@ -383,8 +384,9 @@ export function moveByInc(_args: string): void {
   );
 
   // update player coords
-  storedPlayerEntity.x = storedPlayerEntity.x + newPlayerPos.x;
-  storedPlayerEntity.y = storedPlayerEntity.y + newPlayerPos.y;
+  storedPlayerEntity.x += newPlayerPos.x;
+  storedPlayerEntity.y = newPlayerPos.y;
+  storedPlayerEntity.rot += newPlayerPos.rot;
 
   // serialize player data
   const serializedPlayerEntity = storedPlayerEntity.serializeToString();

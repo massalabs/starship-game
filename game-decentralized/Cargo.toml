@@ -10,7 +10,7 @@ resolver = "2"
 [dependencies]
 macroquad = "0.3.24"
 tungstenite = "0.17"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.21.1", features = ["full"] }
 getrandom = { version="0.2", features=["wasm-bindgen"] }
@@ -20,6 +20,9 @@ near-primitives = "0.14.0"
 strum = "0.24"
 strum_macros = "0.24"
 anyhow = "1.0"
+displaydoc = "0.2"
+thiserror = "1.0"
+lazy_static = "1.4"
 
 # near sdk
 [dependencies.near-jsonrpc-client]

@@ -33,7 +33,7 @@ import { WalletClient,
         ];
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12UKBNkzj3gGjSytoWMZ3S2WdGzpDxTqYyUo3zHRngLmfRTBrPb";
+        const scAddress = "A12ZufE7mGz6RLt3PCN9dsbLE2bK2kvj8mnDE9ibdCycWPcg3C4z";
 
         console.log(`Filtering for sc events....`);
         const eventsFilter = {

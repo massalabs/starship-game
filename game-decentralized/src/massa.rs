@@ -21,6 +21,18 @@ use std::{
     sync::mpsc::Sender,
 };
 
+use crate::entities::PlayerEntityOnchain;
+
+pub async fn get_thread_to_execute_from(client: &Client) -> anyhow::Result<u8> {
+    let cfg = match client.public.get_status().await {
+        Ok(node_status) => node_status,
+        Err(e) => return Err(anyhow::anyhow!(e.to_string())),
+    };
+
+    let thread_to_exec_from = (cfg.next_slot.thread + 2) % cfg.config.thread_count;
+    Ok(thread_to_exec_from)
+}
+
 pub async fn generate_thread_addresses_hashmap(
     client: &Client
 ) -> anyhow::Result<HashMap<u8, KeyPair>> {
@@ -32,10 +44,10 @@ pub async fn generate_thread_addresses_hashmap(
 
     let mut thread_addresses_map: HashMap<u8, KeyPair> = HashMap::new();
     while thread_addresses_map.keys().len() != cfg.thread_count as usize {
-        let keypair = KeyPair::generate();
-        let address = Address::from_public_key(&keypair.get_public_key());
+        let keyPair = KeyPair::generate();
+        let address = Address::from_public_key(&keyPair.get_public_key());
         let thread_number = address.get_thread(cfg.thread_count);
-        thread_addresses_map.insert(thread_number, keypair);
+        thread_addresses_map.insert(thread_number, keyPair);
     }
     Ok(thread_addresses_map)
 }
@@ -136,6 +148,29 @@ impl MassaClient {
                 target_addr: *sc_address,
                 target_func: "registerPlayer".to_owned(),
                 param: player_address.to_string(),
+                max_gas: 70000000,
+                sequential_coins: Amount::zero(),
+                parallel_coins: Amount::zero(),
+                gas_price: Amount::zero(),
+            },
+            Amount::zero(),
+        )
+        .await
+    }
+
+    pub async fn call_set_player_pos(
+        &self,
+        sc_address: &Address,
+        player_entity: &PlayerEntityOnchain,
+        sender_keypair: &KeyPair,
+    ) -> anyhow::Result<Vec<OperationId>> {
+        send_operation(
+            &self.client,
+            sender_keypair,
+            OperationType::CallSC {
+                target_addr: *sc_address,
+                target_func: "setAbsCoors".to_owned(),
+                param: serde_json::to_string(player_entity).unwrap(),
                 max_gas: 70000000,
                 sequential_coins: Amount::zero(),
                 parallel_coins: Amount::zero(),
