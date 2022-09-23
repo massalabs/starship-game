@@ -2,10 +2,8 @@
 resolver = "2"
 
 members = [
-    "game-centralized",
     "game-decentralized-macroquad",
     "game-decentralized-bevy",
-    "server",
     "shared"
 ]
 
