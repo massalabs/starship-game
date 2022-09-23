@@ -1,0 +1,39 @@
+[package]
+name = "game_decentralized_bevy"
+version = "0.1.0"
+authors = []
+edition = "2021"
+resolver = "2"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8"
+tracing-wasm = "=0.2.1"
+uuid = { version = "0.8", features = ["serde", "v4", "wasm-bindgen"] }
+wasm-bindgen = "0.2.81"
+bevy = { version = "0.8.1", features = ["bevy_gltf", "bevy_winit", "render", "png"] }
+winit = { version = "0.26.1", features=["x11"]}
+getrandom = { version="0.2", features=["wasm-bindgen"] }
+bevy_rapier2d = { version = "0.15.0",  features = [ "wasm-bindgen" ] }
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "Window"
+]
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+# less code to include into binary
+panic = 'abort'
+# optimization over all codebase ( better optimization, slower build )
+codegen-units = 1
+# optimization for size ( more aggressive )
+#opt-level = 'z'
+# optimization for size
+# opt-level = 's'
+# link time optimization using using whole-program analysis
+lto = true
+
