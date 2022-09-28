@@ -9,18 +9,12 @@ resolver = "2"
 [dependencies]
 rand = "0.8"
 tracing-wasm = "=0.2.1"
-uuid = { version = "0.8", features = ["serde", "v4", "wasm-bindgen"] }
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
 wasm-bindgen = "0.2.81"
-bevy = { version = "0.8.1", features = ["bevy_gltf", "bevy_winit", "render", "png"] }
-winit = { version = "0.26.1", features=["x11"]}
+bevy = { version = "0.8.1", features = [] }
 getrandom = { version="0.2", features=["wasm-bindgen"] }
-bevy_rapier2d = { version = "0.15.0",  features = [ "wasm-bindgen" ] }
-
-[dependencies.web-sys]
-version = "0.3"
-features = [
-  "Window"
-]
+bevy_rapier2d = { version = "0.16.2",  features = [ "wasm-bindgen" ] }
+tokio = { version = "1.21.1", features = ["full"] }
 
 [profile.dev]
 opt-level = 1

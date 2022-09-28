@@ -1,5 +1,7 @@
+use bevy::prelude::{Vec3, Quat};
+
 #[derive(Debug)]
-pub struct PlayerVirtuallyMoved {
-    pub x: f32,
-    pub y: f32,
+pub struct PlayerMoved {
+    pub pos: Vec3,
+    pub rot: Quat,
 }
