@@ -10,7 +10,7 @@ export class PlayerEntity {
   y: f32 = 0.0;
   rot: f32 = 0.0;
   cbox: f32 = 0.0;
-  tokensCollected: u64 = 0;
+  tokensCollected: f32 = 0.0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<PlayerEntity>(this);

@@ -5,7 +5,7 @@ import {JSON} from 'json-as/assembly';
 @json
 export class GameEvent {
   data: string = '';
-  time: u64 = 0;
+  time: f64 = 0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<GameEvent>(this);

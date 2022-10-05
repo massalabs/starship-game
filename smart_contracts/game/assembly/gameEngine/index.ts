@@ -49,8 +49,8 @@ const PLAYER_REWARD_IN_TOKENS: u64 = 1;
 const THREADS: u8 = 32;
 const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 100;
 const TOTAL_RANDOM_TOKENS: u16 = 10;
-const COLLECTIBLE_BOUNDING_BOX: f32 = 20;
-const PLAYER_BOUNDING_BOX: f32 = 30;
+const COLLECTIBLE_BOUNDING_BOX: f32 = 20.0;
+const PLAYER_BOUNDING_BOX: f32 = 30.0;
 const COLLECTIBLE_VALUE: Amount = new Amount(1);
 const COLLECTIONS_SEPARATOR: string = '@';
 
@@ -254,7 +254,7 @@ export function registerPlayer(address: string): void {
     y: 0.0,
     rot: 90.0,
     cbox: PLAYER_BOUNDING_BOX,
-    tokensCollected: 0,
+    tokensCollected: 0.0 as f32,
   } as PlayerEntity;
   const serializedPlayerData: string = playerEntity.serializeToString();
   playerStates.set(addr.toByteString(), serializedPlayerData);
@@ -304,25 +304,25 @@ export function removePlayer(address: string): void {
  */
 export function setAbsCoors(_args: string): void {
   // read player abs coords
-  const playerEntity = PlayerEntity.parseFromString(_args);
+  const playerEntityUpdate = PlayerEntity.parseFromString(_args);
   // check that player is already registered
   assert(
-      _isPlayerRegistered(new Address(playerEntity.address)),
+      _isPlayerRegistered(new Address(playerEntityUpdate.address)),
       'Player has not been registered'
   );
 
-  // TODO: verify that is one of the player signing addresses (thread addresses)
+  // TODO: verify that is one of the player signing addresses (thread addresses) and the update is for the player address + uuid
   // also verify coords ????
 
   // update storage
-  const serializedPlayerData: string = playerEntity.serializeToString();
+  const serializedPlayerData: string = playerEntityUpdate.serializeToString();
   playerStates.set(
-      playerEntity.address,
+      playerEntityUpdate.address,
       serializedPlayerData
   );
 
   // check if player has collected a token based on his pos
-  // _checkTokenCollected(args);
+  // _checkTokenCollected(playerEntityUpdate);
 
   // send event
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
@@ -390,7 +390,7 @@ export function moveByInc(_args: string): void {
       'Player has not been registered'
   );
 
-  // TODO: verify that is one of the player signing addresses (thread addresses)
+  // TODO: verify that is one of the player signing addresses (thread addresses) + it has the right address and uuid
   // also verify coords against cheating ????
 
   // read old player position
@@ -451,7 +451,7 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
     if (_isIntersection(playerCbox, collectibleCbox)) {
       _playerCollectibleClaim(
           new Address(playerPos.address),
-          new Amount(collectibleEntity.value)
+          new Amount(<u64>collectibleEntity.value)
       );
 
       // add token to player collected tokens
@@ -464,7 +464,7 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
         uuid: collectibleEntity.uuid,
         playerUuid: playerPos.uuid,
         value: collectibleEntity.value,
-        time: env.env.time(),
+        time: env.env.time() as f64,
       } as CollectedEntity;
       if (storedPlayerTokensSerialized) {
         storedPlayerTokensSerialized = storedPlayerTokensSerialized.concat(COLLECTIONS_SEPARATOR).concat(collectedEntity.serializeToString());
@@ -504,7 +504,7 @@ function _playerCollectibleClaim(
   const playerEntity = PlayerEntity.parseFromString(<string>player);
 
   // increase the collected tokens balance
-  playerEntity.tokensCollected = playerEntity.tokensCollected + collectibleValue.value();
+  playerEntity.tokensCollected = playerEntity.tokensCollected + <f32>collectibleValue.value();
 
   // update storage
   playerStates.set(
@@ -648,7 +648,7 @@ function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): Collec
     x: randomX,
     y: randomY,
     cbox: COLLECTIBLE_BOUNDING_BOX,
-    value: COLLECTIBLE_VALUE.value(),
+    value: COLLECTIBLE_VALUE.value() as f32,
   } as CollectibleEntity;
   return posArgs;
 }
@@ -706,7 +706,7 @@ export function _sendGameEvent(data: string): void {
 
   const gameEvent: GameEvent = {
     data,
-    time: env.env.time(), // unix time in milliseconds
+    time: <f64>env.env.time(), // unix time in milliseconds
   } as GameEvent;
   generateEvent(`${gameEvent.serializeToString()}`);
 }

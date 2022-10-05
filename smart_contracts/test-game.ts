@@ -18,18 +18,6 @@ import { IDatastoreEntryInput,
     ProviderType,
     IEventFilter} from "@massalabs/massa-web3";
 
-
-
-interface IGameEntity {
-    uuid: string;
-    playerAddress: string;
-    x: number;
-    y: number;
-    bbMargin: number;
-    tokensCollected: number;
-    balance: number;
-}
-
 (async () => {
     const header = "=".repeat(process.stdout.columns - 1);
     console.log(header);
@@ -52,13 +40,13 @@ interface IGameEntity {
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A129MvYKsK23GRs8sndXYNqo29tf6oiHq2GkCgdGij6dtYMnucyS";
-        const playerAddress = "A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1";
+        const scAddress = "A1BXbydnqpJpSsqV29qyj6ztMLmfuoh1yP16udZrFxCqgfuDQPL";
+        const playerAddress = "A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu";
+        // ========================================================================= 
 
-        
-  
-        
-        // call sc function
+
+        // register player
+        /*
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -76,20 +64,55 @@ interface IGameEntity {
         // await final state
         await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
 
+        // poll events
         const events = await EventPoller.getEventsOnce({
-        start: null,
-        end: null,
-        original_operation_id: callScOperationId,
-        original_caller_address: null,
-        emitter_address: null,
+            start: null,
+            end: null,
+            original_operation_id: callScOperationId,
+            original_caller_address: null,
+            emitter_address: null,
         } as IEventFilter, web3Client);
 
-        console.log("EVENTSSSSSSSSSSSSSS ", events);
-        
-        
+        console.log("REGISTER PLAYER EVENTS ", events);
+        */
 
-        // read sc state
+        // ========================================================================= 
+
+        // set player coordinates
         /*
+        console.log(`Calling smart contract function...`);
+        const callTxId = await web3Client.smartContracts().callSmartContract({
+            fee: 0,
+            gasPrice: 0,
+            maxGas: 200000,
+            parallelCoins: 0,
+            sequentialCoins: 0,
+            targetAddress: scAddress,
+            functionName: "setAbsCoors",
+            parameter: `{"uuid":"uuid-1205432386623302912","address":"A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu","x":1.0,"y":2.0,"rot":90.0,"cbox":30.0,"tokensCollected":0.0}`,
+        } as ICallData);
+        const callScOperationId = callTxId[0];
+        console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
+        
+        // await final state
+        await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
+
+        // poll events
+        const events = await EventPoller.getEventsOnce({
+            start: null,
+            end: null,
+            original_operation_id: callScOperationId,
+            original_caller_address: null,
+            emitter_address: null,
+        } as IEventFilter, web3Client);
+
+        console.log("SET PLAYER COORDS EVENTS ", events);
+        */
+        
+        // ========================================================================= 
+
+        // get player pos
+        
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -102,10 +125,45 @@ interface IGameEntity {
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("DATA ", readTxId[0].output_events[0].data);
+        
+
+        // ========================================================================= 
+
+        // get player uuid
+        /*
+        console.log(`Reading a smart contract state...`);
+        const readTxId = await web3Client.smartContracts().readSmartContract({
+            fee: 0,
+            maxGas: 200000,
+            simulatedGasPrice: 0,
+            targetAddress: scAddress,
+            targetFunction: "getRegisteredPlayerUuid",
+            parameter: playerAddress,
+            callerAddress: playerAddress
+        } as IReadData);
+        console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
+        console.log("DATA ", readTxId[0].output_events[0].data);
         */
 
-        //const status: EOperationStatus = await web3Client.smartContracts().getOperationStatus("2oiSymQNLUYw7AWxLsCX6qo7SUk9v8Q9ivkN68YsEdQ5aBfXnf");
-        //console.log("Status ", status);
+        // ========================================================================= 
+
+        // is player registered
+        /*
+        console.log(`Reading a smart contract state...`);
+        const readTxId = await web3Client.smartContracts().readSmartContract({
+            fee: 0,
+            maxGas: 200000,
+            simulatedGasPrice: 0,
+            targetAddress: scAddress,
+            targetFunction: "isPlayerRegistered",
+            parameter: playerAddress,
+            callerAddress: playerAddress
+        } as IReadData);
+        console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
+        console.log("DATA ", readTxId[0].output_events[0].data);
+        */
+
+        // ========================================================================= 
 
         // get sc storage data
         /*
