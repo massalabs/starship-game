@@ -36,14 +36,13 @@ const providers = [
 
 
 // settings consts
-
 const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 500; // ms = 0.5 secs. Every half a sec update the player pos on chain
 const GAME_EVENTS_POLLING_INTERVAL = 1000; // ms = 1sec.
 const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
 // addresses consts
-const GAME_ADDRESS = "A12hhfGkpxW28mURHPjemFhAFt29tQv4arpkHBtxFkmYv1UBM9f4"; //process.env.REACT_APP_SC_ADDRESS ||
+const GAME_ADDRESS = "A1BXbydnqpJpSsqV29qyj6ztMLmfuoh1yP16udZrFxCqgfuDQPL"; //process.env.REACT_APP_SC_ADDRESS ||
 const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
 const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
 
@@ -197,12 +196,12 @@ export default class WasmDappExample extends Component<IProps, IState> {
     );
     this.gameEventsPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
         const update = events[events.length - 1];
-        console.log("RECEIVED GAME DATA", update.data);
+        //console.log("RECEIVED GAME DATA", update.data);
         let gameEvent: IGameEvent|undefined = undefined;
         try {
           gameEvent = JSON.parse(update.data) as IGameEvent;
         } catch (err) {
-          console.error("Error parsing game event")
+          console.error("Error parsing game event", update.data);
         }
         if (gameEvent) {
           const eventMessageData = gameEvent?.data.split("=");
@@ -210,6 +209,31 @@ export default class WasmDappExample extends Component<IProps, IState> {
           const eventData = eventMessageData.at(1);
           console.log("EVENT NAME", eventName);
           console.log("EVENT DATA", eventData);
+          switch (eventName) {
+            case "PLAYER_MOVED": {
+              const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
+              const playerOnchainState = this.state.playerOnchainState as IPlayerOnchainEntity;
+              if ((playerEntity as IPlayerOnchainEntity).address === playerOnchainState.address && 
+              (playerEntity as IPlayerOnchainEntity).uuid === playerOnchainState.uuid) {
+                  this.setState((prevState: IState, _prevProps: IProps) => {
+                    return {...prevState,
+                      playerOnchainState: {
+                        address: playerEntity.address,
+                        uuid: playerEntity.uuid,
+                        cbox: playerEntity.cbox,
+                        tokensCollected: playerEntity.tokensCollected,
+                        x: playerEntity.x,
+                        y: playerEntity.y,
+                        rot: playerEntity.rot}
+                      }
+                  });
+                }
+              break;
+            }
+            default: {
+              console.log("Unknown event");
+            }
+          }
         }
     });
     this.gameEventsPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
@@ -277,30 +301,37 @@ export default class WasmDappExample extends Component<IProps, IState> {
                       value={this.state.playerOnchainState?.tokensCollected}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
                   <TextField
                       id="outlined-name4"
-                      label="Massa Balance"
+                      label="Tokens Balance"
                       value={0}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
                 </div>
                 <div>
                   <TextField
                       id="outlined-name1"
-                      label="Game Blockchain X Pos"
+                      label="Game X Pos"
                       value={this.state.playerGameState?.x}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
                   <TextField
                       id="outlined-name2"
-                      label="Game Blockchain Y Pos"
+                      label="Game Y Pos"
                       value={this.state.playerGameState?.y}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
+                  <TextField
+                      id="outlined-name2"
+                      label="Game Rot Pos"
+                      value={this.state.playerGameState?.rot}
+                      disabled={true}
+                      variant="filled"
+                  />
                 </div>
                 <div>
                   <TextField
@@ -309,14 +340,21 @@ export default class WasmDappExample extends Component<IProps, IState> {
                       value={this.state.playerOnchainState?.x}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
                   <TextField
                       id="outlined-name4"
                       label="Massa Y Pos"
                       value={this.state.playerOnchainState?.y}
                       disabled={true}
                       variant="filled"
-                    />
+                  />
+                  <TextField
+                      id="outlined-name4"
+                      label="Massa Rot Pos"
+                      value={this.state.playerOnchainState?.rot}
+                      disabled={true}
+                      variant="filled"
+                  />
                 </div>
             </Box>
           </LoadingOverlay>

@@ -9,7 +9,7 @@ export interface IPlayerGameEntity {
   rot: number;
 }
 
-export interface IPlayerOnchainEntity extends IPlayerGameEntity{
+export interface IPlayerOnchainEntity extends IPlayerGameEntity {
   uuid: string;
   address: string;
   cbox: number;

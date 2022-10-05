@@ -600,8 +600,8 @@ export function asyncCreateCollectibles(_args: string): void {
   // save new state
   Storage.set(COLLECTIBLE_TOKENS_STATE_KEY, newState);
 
-  // no need for async msg sending as the contract is sending the msg itself
-  generateEvent(`${GAME_TOKENS_STATE_UPDATED}=${newState}`);
+  // send to all players
+  _generateEvent(_formatGameEvent(GAME_TOKENS_STATE_UPDATED, newState));
 
   // emit wakeup message
   let nextThread = 31 as u8; // choose max. delay

@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
         const scAddress = "A1BXbydnqpJpSsqV29qyj6ztMLmfuoh1yP16udZrFxCqgfuDQPL";
-        const playerAddress = "A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu";
+        const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
 
