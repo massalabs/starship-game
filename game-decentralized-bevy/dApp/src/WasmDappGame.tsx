@@ -42,7 +42,7 @@ const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
 // addresses consts
-const GAME_ADDRESS = "A1BXbydnqpJpSsqV29qyj6ztMLmfuoh1yP16udZrFxCqgfuDQPL"; //process.env.REACT_APP_SC_ADDRESS ||
+const GAME_ADDRESS = "A178zjYtJEYsg33yaEqUjB9azgfX567tT4rSF4jQKDLVwXieqhu"; //process.env.REACT_APP_SC_ADDRESS ||
 const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
 const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
 
@@ -228,6 +228,20 @@ export default class WasmDappExample extends Component<IProps, IState> {
                       }
                   });
                 }
+              break;
+            }
+            case "GAME_TOKENS_STATE_UPDATED": {
+              break;
+            }
+            case "PLAYER_ADDED": {
+              const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
+              console.log("Player added ", playerEntity);
+              break;
+            }
+            case "PLAYER_REMOVED": {
+              break;
+            }
+            case "TOKEN_COLLECTED": {
               break;
             }
             default: {
