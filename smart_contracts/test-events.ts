@@ -46,7 +46,7 @@ import { WalletClient,
             is_final: true
         } as IEventRegexFilter;
                 
-        const eventPoller = EventPoller.startEventPoller(
+        const eventPoller = EventPoller.startEventsPolling(
             eventsFilter,
             1000,
             web3Client

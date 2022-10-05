@@ -16,8 +16,8 @@
   ],
   "license": "(MIT AND Apache-2.0)",
   "dependencies": {
-    "@massalabs/massa-sc-utils": "^2.1.7",
-    "@massalabs/massa-web3": "1.10.7",
+    "@massalabs/massa-sc-utils": "^2.1.8",
+    "@massalabs/massa-web3": "1.10.8",
     "@noble/hashes": "^1.1.2",
     "chalk": "^4.1.0",
     "handlebars": "^4.7.7",

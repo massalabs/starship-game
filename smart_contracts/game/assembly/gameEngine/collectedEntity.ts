@@ -6,6 +6,8 @@ import {JSON} from 'json-as/assembly';
 export class CollectedEntity {
   uuid: string = '';
   time: u64 = 0;
+  playerUuid: string = '';
+  value: u64 = 0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<CollectedEntity>(this);

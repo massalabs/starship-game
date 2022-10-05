@@ -2,8 +2,8 @@
 resolver = "2"
 
 members = [
-    "game-decentralized-bevy",
-    "shared"
+    "shared",
+    "game-decentralized-macroquad"
 ]
 
-exclude = ["game-decentralized-macroquad"]
+exclude = ["game-decentralized-macroquad", "game-decentralized-bevy"]

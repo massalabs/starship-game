@@ -3,9 +3,12 @@ use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 
 pub mod components;
 pub mod events;
+pub mod wasm_bindings;
 
 use components::{MassaToken, Player};
 use events::PlayerMoved;
+
+use crate::wasm_bindings::VIRTUAL_GAME_POSITION;
 
 // global settings
 const TIME_STEP: f32 = 1.0 / 50.0;
@@ -22,29 +25,19 @@ fn main() {
         title: "Starship!".to_string(),
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
-        present_mode: PresentMode::Immediate,
+        present_mode: PresentMode::AutoVsync,
         #[cfg(target_arch = "wasm32")]
         canvas: Some(String::from("#game")),
         ..Default::default()
     });
     app.add_plugins(DefaultPlugins);
     app.add_event::<PlayerMoved>();
-    app.insert_resource(
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap(),
-    );
     app.add_startup_system(setup)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                 .with_system(update_virtual_input)
                 .with_system(on_player_moved)
-                //.with_system(render_tokens)
-                //.with_system(fire_controller)
-                //.with_system(on_bullet_fired)
-                //.with_system(update_external_path),
         )
         .run();
 }
@@ -90,9 +83,13 @@ fn update_virtual_input(
     // ship rotation
     let mut rotation_factor = 0.0;
     let mut movement_factor = 0.0;
+    let mut extra_acceleration = 1.0f32;
 
     if keyboard_input.pressed(KeyCode::Up) {
         movement_factor += 1.0;
+        if keyboard_input.pressed(KeyCode::Space) {
+            extra_acceleration = 2.0;
+        }
     }
 
     if keyboard_input.pressed(KeyCode::Left) {
@@ -112,7 +109,7 @@ fn update_virtual_input(
     // get the ship's forward vector by applying the current rotation to the ships initial facing vector
     let movement_direction = transform.rotation * Vec3::Y;
     // get the distance the ship will move based on direction, the ship's movement speed and delta time
-    let movement_distance = movement_factor * ship.movement_speed * TIME_STEP;
+    let movement_distance = movement_factor * ship.movement_speed * extra_acceleration * TIME_STEP;
     // create the change in translation using the new movement direction and distance
     let translation_delta = movement_direction * movement_distance;
     // update the ship translation with our new translation delta
@@ -123,13 +120,6 @@ fn update_virtual_input(
 
     transform.translation = transform.translation.clamp(-extents, extents);
 
-
-    // print info event
-    //info!(
-    //    "virtual direction [X/Y]: {:?} @ {:?}",
-    //    ship.virtual_x, ship.virtual_y
-    //);
-
     // send message about ship translation
     player_moved_events.send(PlayerMoved {
         pos: transform.translation,
@@ -139,13 +129,11 @@ fn update_virtual_input(
 
 fn on_player_moved(mut events: EventReader<PlayerMoved>) {
     for movement_event in events.iter() {
-        info!("on_player_virtually_moved X/Y: {:?}---{:?}", movement_event.pos, movement_event.rot);
-        /*
+        //info!("on_player_virtually_moved X/Y: {:?}---{:?}", movement_event.pos, movement_event.rot);
         VIRTUAL_GAME_POSITION.with(|pos| {
             pos.borrow_mut()
-                .set_coors(movement_event.x, movement_event.y);
+                .from_game_vector(movement_event.pos, movement_event.rot);
         });
-        */
     }
 }
 

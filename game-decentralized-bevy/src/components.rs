@@ -1,7 +1,15 @@
-use bevy::prelude::*;
+use bevy::prelude::{*, shape::Quad};
 
+
+// player component
 #[derive(Component)]
-pub struct MassaToken;
+pub struct MassaToken {
+    pub uuid: String,
+    /// linear speed in meters per second
+    pub pos: Vec2,
+    /// rotation speed in radians per second
+    pub rot: Quad,
+}
 
 // player component
 #[derive(Component)]

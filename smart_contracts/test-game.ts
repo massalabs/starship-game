@@ -15,7 +15,8 @@ import { IDatastoreEntryInput,
     EOperationStatus,
     IContractData,
     IProvider,
-    ProviderType} from "@massalabs/massa-web3";
+    ProviderType,
+    IEventFilter} from "@massalabs/massa-web3";
 
 
 
@@ -36,24 +37,27 @@ interface IGameEntity {
     console.log(header);
 
     try {
-
         // init client
         const baseAccount: IAccount = await WalletClient.getAccountFromSecretKey("S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC");
-        //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
-        const providers: Array<IProvider> = [
+        const providers = [
             {
-                url: "http://51.75.131.129:33035",
+                url: "https://inno.massa.net/test13",
                 type: ProviderType.PUBLIC
             } as IProvider,
             {
-                url: "http://51.75.131.129:33034",
+                url: "https://inno.massa.net/test13",
                 type: ProviderType.PRIVATE
             } as IProvider
         ];
+        //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12ZufE7mGz6RLt3PCN9dsbLE2bK2kvj8mnDE9ibdCycWPcg3C4z";
+        const scAddress = "A129MvYKsK23GRs8sndXYNqo29tf6oiHq2GkCgdGij6dtYMnucyS";
+        const playerAddress = "A12PWTzCKkkE9P5Supt3Fkb4QVZ3cdfB281TGaup7Nv1DY12a6F1";
 
+        
+  
+        
         // call sc function
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
@@ -63,11 +67,24 @@ interface IGameEntity {
             parallelCoins: 0,
             sequentialCoins: 0,
             targetAddress: scAddress,
-            functionName: "registerPlayer", //playerAddress
-            parameter: "A12A2NAA3tTs9dW2t3MnoxpbADdLV7gWE9Le9BygsbTgjcFmMj4o",
+            functionName: "registerPlayer",
+            parameter: playerAddress,
         } as ICallData);
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
+        
+        // await final state
+        await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
+
+        const events = await EventPoller.getEventsOnce({
+        start: null,
+        end: null,
+        original_operation_id: callScOperationId,
+        original_caller_address: null,
+        emitter_address: null,
+        } as IEventFilter, web3Client);
+
+        console.log("EVENTSSSSSSSSSSSSSS ", events);
         
         
 
@@ -84,6 +101,7 @@ interface IGameEntity {
             callerAddress: playerAddress
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
+        console.log("DATA ", readTxId[0].output_events[0].data);
         */
 
         //const status: EOperationStatus = await web3Client.smartContracts().getOperationStatus("2oiSymQNLUYw7AWxLsCX6qo7SUk9v8Q9ivkN68YsEdQ5aBfXnf");

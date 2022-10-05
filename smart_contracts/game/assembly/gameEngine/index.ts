@@ -79,6 +79,16 @@ function _generateUuid(): string {
 
 /**
  * Returns if the Player Address has been registered or not.
+ * @param {string} gameEventName - Address of the player.
+ * @param {string} gameEventData - Address of the player.
+ * @return {string} the formatted game event.
+ */
+function _formatGameEvent(gameEventName: string, gameEventData: string): string {
+  return `${gameEventName}=${gameEventData}`;
+}
+
+/**
+ * Returns if the Player Address has been registered or not.
  * @param {Address} address - Address of the player.
  * @return {bool} indicates if player is registered or not.
  */
@@ -148,8 +158,8 @@ export function setScreenWidth(screenWidth: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(SCREEN_WIDTH_KEY, screenWidth);
 
-  // send event
-  _generateEvent(`${SCREEN_WIDTH_ADJUSTED}=${screenWidth}`);
+  // send event to all players
+  _generateEvent(_formatGameEvent(SCREEN_WIDTH_ADJUSTED, screenWidth));
 }
 
 /**
@@ -161,8 +171,8 @@ export function setScreenHeight(screenHeight: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(SCREEN_HEIGHT_KEY, screenHeight);
 
-  // send event
-  _generateEvent(`${SCREEN_HEIGHT_ADJUSTED}=${screenHeight}`);
+  // send event to all players
+  _generateEvent(_formatGameEvent(SCREEN_HEIGHT_ADJUSTED, screenHeight));
 }
 
 /**
@@ -174,8 +184,8 @@ export function addTokenAddress(tokenAddress: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(TOKEN_ADDRESS_KEY, tokenAddress.toString());
 
-  // send event
-  _generateEvent(`${TOKEN_ADDRESS_ADDED}=${tokenAddress.toString()}`);
+  // send event to all players
+  _generateEvent(_formatGameEvent(TOKEN_ADDRESS_ADDED, tokenAddress.toString()));
 }
 
 /**
@@ -200,10 +210,8 @@ export function addGameOwnerAddress(_args: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(OWNER_ADDRESS_KEY, Context.caller().toByteString());
 
-  // send event
-  _generateEvent(
-      `${GAME_OWNER_ADDRESS_ADDED}=${Context.caller().toByteString()}`
-  );
+  // send event to all players
+  _generateEvent(_formatGameEvent(GAME_OWNER_ADDRESS_ADDED, Context.caller().toByteString()));
 }
 
 /**
@@ -251,8 +259,13 @@ export function registerPlayer(address: string): void {
   const serializedPlayerData: string = playerEntity.serializeToString();
   playerStates.set(addr.toByteString(), serializedPlayerData);
 
-  // send event
-  _generateEvent(`${PLAYER_ADDED}=${serializedPlayerData}`);
+  const eventMessage = _formatGameEvent(PLAYER_ADDED, serializedPlayerData);
+
+  // send event from caller
+  generateEvent(eventMessage);
+
+  // send event from sc to all players
+  _generateEvent(eventMessage);
 }
 
 /**
@@ -275,8 +288,13 @@ export function removePlayer(address: string): void {
   playerStates.delete(addr.toByteString());
   playerTokens.delete(addr.toByteString());
 
-  // send event
-  _generateEvent(`${PLAYER_REMOVED}=${addr.toByteString()}`);
+  const eventMessage = _formatGameEvent(PLAYER_REMOVED, addr.toByteString());
+
+  // send event from caller
+  generateEvent(eventMessage);
+
+  // send event to all players
+  _generateEvent(eventMessage);
 }
 
 /**
@@ -307,7 +325,7 @@ export function setAbsCoors(_args: string): void {
   // _checkTokenCollected(args);
 
   // send event
-  _generateEvent(`${PLAYER_MOVED}=${serializedPlayerData}`);
+  _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
 }
 
 /**
@@ -400,8 +418,8 @@ export function moveByInc(_args: string): void {
   // check if player has collected a token based on his pos
   _checkTokenCollected(storedPlayerEntity);
 
-  // send event
-  _generateEvent(`${PLAYER_MOVED}=${serializedPlayerEntity}`);
+  // send event to all players
+  _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerEntity));
 }
 
 /**
@@ -444,6 +462,8 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
       // append currently collected token to state
       const collectedEntity: CollectedEntity = {
         uuid: collectibleEntity.uuid,
+        playerUuid: playerPos.uuid,
+        value: collectibleEntity.value,
         time: env.env.time(),
       } as CollectedEntity;
       if (storedPlayerTokensSerialized) {
@@ -455,10 +475,8 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
       // add update back to hashmap
       playerTokens.set(playerPos.address, storedPlayerTokensSerialized);
 
-      // generate an event
-      _generateEvent(
-          `${TOKEN_COLLECTED}=${playerPos.uuid},${collectibleEntity.uuid}`
-      );
+      // generate an event and send to all players
+      _generateEvent(_formatGameEvent(TOKEN_COLLECTED, collectedEntity.serializeToString()));
     }
   }
 }
@@ -563,9 +581,9 @@ export function asyncCreateCollectibles(_args: string): void {
   const curThread = currentThread();
   const curPeriod = currentPeriod();
 
-  generateEvent(
-      `asyncCreateCollectibles called (thread = ${curThread}, period = ${curPeriod}))`
-  );
+  // generateEvent(
+  //     `asyncCreateCollectibles called (thread = ${curThread}, period = ${curPeriod}))`
+  // );
 
   // check that the current slot index is strictly higher than the last time we were called
   const lastSlotIndex: u64 = u64(parseInt(Storage.get(LAST_SLOT_INDEX_KEY)));
@@ -609,9 +627,9 @@ export function asyncCreateCollectibles(_args: string): void {
       ''
   );
 
-  generateEvent(
-      `asyncCreateCollectibles finished (thread = ${curThread}, period = ${curPeriod}))`
-  );
+  // generateEvent(
+  //   `asyncCreateCollectibles finished (thread = ${curThread}, period = ${curPeriod}))`
+  // );
 }
 
 /**
