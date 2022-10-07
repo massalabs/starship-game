@@ -1,10 +1,11 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export function get_player_x(): number;
+export function get_player_y(): number;
+export function get_player_rot(): number;
+export function push_game_entity_updates(a: number, b: number): void;
 export function main(a: number, b: number): number;
-export function get_x(): number;
-export function get_y(): number;
-export function get_rot(): number;
 export function wgpu_render_pass_set_pipeline(a: number, b: number): void;
 export function wgpu_render_pass_set_bind_group(a: number, b: number, c: number, d: number, e: number): void;
 export function wgpu_render_pass_set_vertex_buffer(a: number, b: number, c: number, d: number, e: number): void;
@@ -55,16 +56,16 @@ export function wgpu_render_pass_execute_bundles(a: number, b: number, c: number
 export function __wbindgen_malloc(a: number): number;
 export function __wbindgen_realloc(a: number, b: number, c: number): number;
 export const __wbindgen_export_2: WebAssembly.Table;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hf9f86f003dd7fc45(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h5993e15dd9474488(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h9f7403b2cc531fe9(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h55c1fd80546b8e1a(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h2361e69bc6799170(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd275e1b238c81d2f(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h173f8be3aff38790(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hf486903ffcfad319(a: number, b: number, c: number): void;
-export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__haf352f2c303f040e(a: number, b: number): void;
-export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h55efd199d96e8fc7(a: number, b: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h571982caf32f70ff(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h7e460694ad39cdce(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h56ac57070d0b2590(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1ea3611437f7d221(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hdd949f59f6d350aa(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h1b6737880e96837c(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h0d10d53199299a3c(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h95e1c6e8ce5413e4(a: number, b: number, c: number): void;
+export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__ha44d980d6e43be2b(a: number, b: number): void;
+export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h5c3a7af0b9ed805e(a: number, b: number): void;
 export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h946949c12c9079a5(a: number, b: number, c: number): void;
 export function __wbindgen_free(a: number, b: number): void;
 export function __wbindgen_exn_store(a: number): void;

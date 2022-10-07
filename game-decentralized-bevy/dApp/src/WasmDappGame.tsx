@@ -13,6 +13,7 @@ import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
 import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { generateThreadAddressesMap } from "./utils";
+import { GameEntity } from "./GameEntity";
 
 const wait = async (timeMilli: number): Promise<void> => {
 	return new Promise<void>((resolve, reject) => {
@@ -226,6 +227,9 @@ export default class WasmDappExample extends Component<IProps, IState> {
                         y: playerEntity.y,
                         rot: playerEntity.rot}
                       }
+                  }, () => {
+                    const gameEntity = new GameEntity("UPDATE", "PLAYER", "SOME UUID", " 0x0", 100.0, 200.0, 0.5);
+                    game.push_game_entity_updates([gameEntity]);
                   });
                 }
               break;
@@ -260,9 +264,9 @@ export default class WasmDappExample extends Component<IProps, IState> {
     }
 
     // get coors from wasm
-    const newX = game.get_x();
-    const newY = game.get_y();
-    const newRot = game.get_rot();
+    const newX = game.get_player_x();
+    const newY = game.get_player_y();
+    const newRot = game.get_player_rot();
     //console.log("Got game update: ", newX, newY, newRot);
 
     // TODO: only update if bc position is diff to current game pos

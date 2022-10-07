@@ -1,21 +1,45 @@
-use bevy::prelude::{*, shape::Quad};
+use bevy::math::{Vec2, Vec3};
+use bevy::prelude::Component;
 
+#[derive(Component, Clone, Debug)]
+pub struct SpriteSize(pub Vec2);
 
-// player component
-#[derive(Component)]
-pub struct MassaToken {
-    pub uuid: String,
-    /// linear speed in meters per second
-    pub pos: Vec2,
-    /// rotation speed in radians per second
-    pub rot: Quad,
+impl From<(f32, f32)> for SpriteSize {
+    fn from(val: (f32, f32)) -> Self {
+        SpriteSize(Vec2::new(val.0, val.1))
+    }
 }
 
-// player component
-#[derive(Component)]
-pub struct Player {
-    /// linear speed in meters per second
-    pub movement_speed: f32,
-    /// rotation speed in radians per second
-    pub rotation_speed: f32,
+#[derive(Component, Clone, Debug)]
+pub struct Movable {
+    pub auto_despawn: bool,
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct Velocity {
+    pub linear: f32,
+    pub rotational: f32,
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct Blockchainable {
+    pub address: String,
+}
+
+#[derive(Component, Clone, Debug)]
+pub struct Identifyable(pub String);
+
+#[derive(Component, Clone, Debug)]
+pub struct Collectible;
+
+#[derive(Component, Clone, Debug)]
+pub struct LocalPlayer;
+
+#[derive(Component, Clone, Debug)]
+pub struct RemotePlayer;
+
+#[derive(Component, Clone, Debug)]
+pub enum PlayerType {
+    Local,
+    Remote,
 }

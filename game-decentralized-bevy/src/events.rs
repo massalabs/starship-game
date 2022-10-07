@@ -1,4 +1,4 @@
-use bevy::prelude::{Vec3, Quat};
+use bevy::prelude::{Quat, Vec3};
 
 #[derive(Debug)]
 pub struct PlayerMoved {
