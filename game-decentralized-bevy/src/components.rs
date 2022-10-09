@@ -1,4 +1,4 @@
-use bevy::math::{Vec2, Vec3};
+use bevy::math::Vec2;
 use bevy::prelude::Component;
 
 #[derive(Component, Clone, Debug)]
@@ -37,9 +37,3 @@ pub struct LocalPlayer;
 
 #[derive(Component, Clone, Debug)]
 pub struct RemotePlayer;
-
-#[derive(Component, Clone, Debug)]
-pub enum PlayerType {
-    Local,
-    Remote,
-}

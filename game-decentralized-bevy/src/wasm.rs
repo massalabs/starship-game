@@ -72,8 +72,7 @@ extern "C" {
 
     #[wasm_bindgen(constructor)]
     fn new_player(
-        op: String,
-        kind: String,
+        operation: String,
         uuid: String,
         address: String,
         x: f32,
@@ -90,16 +89,6 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, js_name = get_operation)]
     fn get_operation(this: &GameEntityUpdate) -> String;
-
-    // ---------KIND-------------- //
-    #[wasm_bindgen(method, setter, js_name = set_kind)]
-    fn set_kind(
-        this: &GameEntityUpdate,
-        value: String,
-    ); // player, token
-
-    #[wasm_bindgen(method, getter, js_name = get_kind)]
-    fn get_kind(this: &GameEntityUpdate) -> String;
 
     // --------UUID--------------- //
     #[wasm_bindgen(method, setter, js_name = set_uuid)]
@@ -119,7 +108,7 @@ extern "C" {
     );
 
     #[wasm_bindgen(method, getter, js_name = get_address)]
-    fn get_address(this: &GameEntityUpdate) -> String;
+    fn get_address(this: &GameEntityUpdate) -> Option<String>;
 
     // -----------X------------ //
     #[wasm_bindgen(method, setter, js_name = set_x)]
@@ -129,7 +118,7 @@ extern "C" {
     );
 
     #[wasm_bindgen(method, getter, js_name = get_x)]
-    fn get_x(this: &GameEntityUpdate) -> f32;
+    fn get_x(this: &GameEntityUpdate) -> Option<f32>;
 
     // ----------Y------------- //
     #[wasm_bindgen(method, setter, js_name = set_y)]
@@ -139,7 +128,7 @@ extern "C" {
     );
 
     #[wasm_bindgen(method, getter, js_name = get_y)]
-    fn get_y(this: &GameEntityUpdate) -> f32;
+    fn get_y(this: &GameEntityUpdate) -> Option<f32>;
 
     // ---------ROT-------------- //
     #[wasm_bindgen(method, setter, js_name = set_rot)]
@@ -149,7 +138,7 @@ extern "C" {
     );
 
     #[wasm_bindgen(method, getter, js_name = get_rot)]
-    fn get_rot(this: &GameEntityUpdate) -> f32;
+    fn get_rot(this: &GameEntityUpdate) -> Option<f32>;
 }
 
 // local communication thread between js and the game engine [JS (write) --> RUST game loop (read)]

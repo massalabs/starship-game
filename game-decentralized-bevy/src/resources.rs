@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use std::collections::BTreeMap;
 
-use crate::components::PlayerType;
-
 #[derive(Debug, Clone)]
 pub struct GameTextures {
     pub player: Handle<Image>,
@@ -17,72 +15,72 @@ pub struct WinSize {
 }
 
 #[derive(Clone, Debug)]
-pub struct GamePlayerState {
-    pub r#type: PlayerType,
+pub struct RemoteGamePlayerState {
     pub uuid: String,
     pub address: String,
     /// linear speed in meters per second
-    pub movement_speed: Vec2,
+    pub position: Vec3,
     /// rotation speed in radians per second
-    pub rotation_speed: Quat,
+    pub rotation: Quat,
 }
 
 #[derive(Clone, Debug)]
-pub struct CollectibleState {
+pub struct RemoteCollectibleState {
     pub uuid: String,
     /// position of the token
-    pub position: Vec2,
+    pub position: Vec3,
+}
+
+#[derive(Clone, Debug)]
+pub enum RemoteStateType {
+    PlayerAdded(RemoteGamePlayerState),
+    PlayerRemoved(String),
+    PlayerMoved(RemoteGamePlayerState),
+    TokenCollected((String, String)),
+    GameTokensUpdated(Vec<RemoteCollectibleState>)
 }
 
 #[derive(Clone)]
-pub struct GameState {
-    pub local_player: GamePlayerState,
-    pub remote_players: BTreeMap<String, GamePlayerState>,
-    pub remote_collectibles: BTreeMap<String, CollectibleState>,
+pub struct RemoteGameState {
+    pub remote_players: BTreeMap<String, RemoteGamePlayerState>, //uuid - state mapping
+    pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, //uuid - state mapping
 }
 
-impl GameState {
+impl RemoteGameState {
     fn add_new_player(
         &mut self,
         uuid: String,
-        player: GamePlayerState,
-    ) -> Option<GamePlayerState> {
+        player: RemoteGamePlayerState,
+    ) -> Option<RemoteGamePlayerState> {
         self.remote_players.insert(uuid, player)
     }
 
     fn remove_player(
         &mut self,
         uuid: String,
-    ) -> Option<GamePlayerState> {
+    ) -> Option<RemoteGamePlayerState> {
         self.remote_players.remove(&uuid)
     }
 
     fn add_new_collectible(
         &mut self,
         uuid: String,
-        coll: CollectibleState,
-    ) -> Option<CollectibleState> {
+        coll: RemoteCollectibleState,
+    ) -> Option<RemoteCollectibleState> {
         self.remote_collectibles.insert(uuid, coll)
     }
 
     fn remove_collectible(
         &mut self,
         uuid: String,
-    ) -> Option<CollectibleState> {
+    ) -> Option<RemoteCollectibleState> {
         self.remote_collectibles.remove(&uuid)
     }
 }
 
-impl Default for GameState {
+impl Default for RemoteGameState {
     fn default() -> Self {
         Self {
-            local_player: GamePlayerState {
-                uuid: "".to_owned(),
-                address: "".to_owned(),
-                movement_speed: Vec2::ZERO,
-                rotation_speed: Quat::NAN,
-                r#type: PlayerType::Local,
-            },
             remote_players: BTreeMap::new(),
             remote_collectibles: BTreeMap::new(),
         }

@@ -13,7 +13,7 @@ import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
 import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { generateThreadAddressesMap } from "./utils";
-import { GameEntity } from "./GameEntity";
+import { GameEntityUpdate } from "./GameEntity";
 
 const wait = async (timeMilli: number): Promise<void> => {
 	return new Promise<void>((resolve, reject) => {
@@ -34,6 +34,13 @@ const providers = [
       type: ProviderType.PRIVATE
   } as IProvider
 ];
+
+// game events
+const PLAYER_MOVED = "PLAYER_MOVED";
+const GAME_TOKENS_STATE_UPDATED = "GAME_TOKENS_STATE_UPDATED";
+const PLAYER_ADDED = "PLAYER_ADDED";
+const PLAYER_REMOVED = "PLAYER_REMOVED";
+const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
 
 // settings consts
@@ -208,11 +215,17 @@ export default class WasmDappExample extends Component<IProps, IState> {
           const eventMessageData = gameEvent?.data.split("=");
           const eventName = eventMessageData.at(0);
           const eventData = eventMessageData.at(1);
-          console.log("EVENT NAME", eventName);
-          console.log("EVENT DATA", eventData);
+          //console.log("EVENT NAME", eventName);
+          //console.log("EVENT DATA", eventData);
           switch (eventName) {
-            case "PLAYER_MOVED": {
+            case PLAYER_MOVED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
+
+              // update game engine state
+              const gameEntity = new GameEntityUpdate(PLAYER_MOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              game.push_game_entity_updates([gameEntity]);
+
+              // in case of the update concerning locla player update local player's reported bc coordinates
               const playerOnchainState = this.state.playerOnchainState as IPlayerOnchainEntity;
               if ((playerEntity as IPlayerOnchainEntity).address === playerOnchainState.address && 
               (playerEntity as IPlayerOnchainEntity).uuid === playerOnchainState.uuid) {
@@ -227,25 +240,22 @@ export default class WasmDappExample extends Component<IProps, IState> {
                         y: playerEntity.y,
                         rot: playerEntity.rot}
                       }
-                  }, () => {
-                    const gameEntity = new GameEntity("UPDATE", "PLAYER", "SOME UUID", " 0x0", 100.0, 200.0, 0.5);
-                    game.push_game_entity_updates([gameEntity]);
                   });
                 }
               break;
             }
-            case "GAME_TOKENS_STATE_UPDATED": {
-              break;
-            }
-            case "PLAYER_ADDED": {
+            case PLAYER_ADDED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player added ", playerEntity);
               break;
             }
-            case "PLAYER_REMOVED": {
+            case PLAYER_REMOVED: {
               break;
             }
-            case "TOKEN_COLLECTED": {
+            case TOKEN_COLLECTED: {
+              break;
+            }
+            case GAME_TOKENS_STATE_UPDATED: {
               break;
             }
             default: {

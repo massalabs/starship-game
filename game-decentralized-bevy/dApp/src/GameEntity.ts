@@ -1,15 +1,13 @@
-export class GameEntity {
-    public operation: string = '';
-    public kind: string = '';
-    public uuid: string = '';
-    public address: string = '';
-    public x: number = 0.0;
-    public y: number = 0.0;
-    public rot: number = 0.0;
+export class GameEntityUpdate {
+    public operation: string;
+    public uuid: string;
+    public address: string;
+    public x: number;
+    public y: number;
+    public rot: number;
   
-    constructor(operation: string, kind: string, uuid: string, address: string, x: number, y: number, rot: number) {
+    constructor(operation: string, uuid: string, address: string, x: number, y: number, rot: number) {
       this.operation = operation;
-      this.kind = kind;
       this.uuid = uuid;
       this.address = address;
       this.x = x;
@@ -22,13 +20,6 @@ export class GameEntity {
     }
     get get_operation() {
       return this.operation;
-    }
-    // ------------------------------------
-    set set_kind(kind: string) {
-        this.kind = kind;
-    }
-    get get_kind() {
-        return this.kind;
     }
     // ------------------------------------
     set set_uuid(uuid: string) {
