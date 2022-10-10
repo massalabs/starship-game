@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import './App.css';
 import 'react-toastify/dist/ReactToastify.css';
 import type {} from '@mui/lab/themeAugmentation';
-import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, IProvider, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR, ProviderType } from "@massalabs/massa-web3";
+import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, INodeStatus, IProvider, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR, ProviderType } from "@massalabs/massa-web3";
 import TextField from '@mui/material/TextField';
 import * as game from "starship";
 import Box from '@mui/material/Box';
@@ -45,7 +45,7 @@ const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
 // settings consts
 const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 500; // ms = 0.5 secs. Every half a sec update the player pos on chain
-const GAME_EVENTS_POLLING_INTERVAL = 1000; // ms = 1sec.
+const GAME_EVENTS_POLLING_INTERVAL = 500; // 500 ms = 0.5 sec.
 const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
@@ -187,8 +187,18 @@ export default class WasmDappExample extends Component<IProps, IState> {
   }
   
   async listenOnGameEvents(): Promise<void> {
+
+    // determine the last slot
+    let nodeStatusInfo: INodeStatus|null|undefined = null;
+    try {
+      nodeStatusInfo = await (this.state.web3Client as Client).publicApi().getNodeStatus();
+    } catch(ex) {
+      console.log("Error getting node status");
+      throw ex;
+    }
+
     const eventsFilter = {
-      start: null,
+      start: (nodeStatusInfo as INodeStatus).last_slot, // start filtering only from the last slot which was processed onwards
       end: null,
       original_operation_id: null,
       original_caller_address: null,
@@ -203,8 +213,8 @@ export default class WasmDappExample extends Component<IProps, IState> {
       this.state.web3Client as Client
     );
     this.gameEventsPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
-        const update = events[events.length - 1];
-        //console.log("RECEIVED GAME DATA", update.data);
+      // preserve the events order
+      events.forEach(update => {
         let gameEvent: IGameEvent|undefined = undefined;
         try {
           gameEvent = JSON.parse(update.data) as IGameEvent;
@@ -215,8 +225,8 @@ export default class WasmDappExample extends Component<IProps, IState> {
           const eventMessageData = gameEvent?.data.split("=");
           const eventName = eventMessageData.at(0);
           const eventData = eventMessageData.at(1);
-          //console.log("EVENT NAME", eventName);
-          //console.log("EVENT DATA", eventData);
+          console.log("EVENT NAME", eventName);
+          console.log("EVENT DATA", eventData);
           switch (eventName) {
             case PLAYER_MOVED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
@@ -225,7 +235,7 @@ export default class WasmDappExample extends Component<IProps, IState> {
               const gameEntity = new GameEntityUpdate(PLAYER_MOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
 
-              // in case of the update concerning locla player update local player's reported bc coordinates
+              // in case of the update concerning local player update local player's reported bc coordinates
               const playerOnchainState = this.state.playerOnchainState as IPlayerOnchainEntity;
               if ((playerEntity as IPlayerOnchainEntity).address === playerOnchainState.address && 
               (playerEntity as IPlayerOnchainEntity).uuid === playerOnchainState.uuid) {
@@ -247,6 +257,12 @@ export default class WasmDappExample extends Component<IProps, IState> {
             case PLAYER_ADDED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player added ", playerEntity);
+              // update game engine state
+              const gameEntity = new GameEntityUpdate(PLAYER_ADDED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              game.push_game_entity_updates([gameEntity]);
+              toast(`Player ${playerEntity.uuid} just joined!`,{
+                className: "toast"
+              });
               break;
             }
             case PLAYER_REMOVED: {
@@ -263,6 +279,7 @@ export default class WasmDappExample extends Component<IProps, IState> {
             }
           }
         }
+      });
     });
     this.gameEventsPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
   }
@@ -280,15 +297,18 @@ export default class WasmDappExample extends Component<IProps, IState> {
     //console.log("Got game update: ", newX, newY, newRot);
 
     // TODO: only update if bc position is diff to current game pos
-
-    // update coors state and then update blockchain
-    this.setState((prevState: IState, prevProps: IProps) => {
-      return {...prevState, playerGameState: {x: newX, y: newY, rot: newRot}}
-    }, async () => {
-      //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
-      const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot } as IPlayerOnchainEntity;
-      await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
-    });
+    //if (Math.abs((this.state.playerOnchainState as IPlayerOnchainEntity).x - newX) > 0.1
+    //  || Math.abs((this.state.playerOnchainState as IPlayerOnchainEntity).y as number - newY) > 0.1
+    //  || Math.abs((this.state.playerOnchainState as IPlayerOnchainEntity).rot as number - newRot) > 0.1) {
+      // update coors state and then update blockchain
+      this.setState((prevState: IState, prevProps: IProps) => {
+        return {...prevState, playerGameState: {x: newX, y: newY, rot: newRot}}
+      }, async () => {
+        //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
+        const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot } as IPlayerOnchainEntity;
+        await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
+      });
+    //}
     // set a new timeout
     this.updateBlockchainPositionTimeout = setTimeout(this.updateBlockchainPosition, UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY);
   }

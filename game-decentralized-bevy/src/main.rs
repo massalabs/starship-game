@@ -1,13 +1,15 @@
+use crate::resources::RemoteGamePlayerState;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
-use components::{Blockchainable, Identifyable, LocalPlayer, Movable, Velocity};
+use components::{
+    Blockchainable, Identifyable, LocalPlayer, Movable, RemotePlayer, SpriteSize, Velocity,
+};
 use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use player::PlayerPlugin;
-use resources::{RemoteGameState, GameTextures, RemoteStateType, WinSize};
+use resources::{GameTextures, RemoteGameState, RemoteStateType, WinSize};
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
-use crate::resources::RemoteGamePlayerState;
 
 pub mod collectible;
 pub mod components;
@@ -55,7 +57,7 @@ fn main() {
     app.add_plugin(PlayerPlugin);
     //app.add_startup_system(setup_system);
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
-    app.add_system(entities_update_system);
+    app.add_system(entities_from_blockchain_update_system);
     app.run();
 }
 
@@ -98,8 +100,10 @@ fn setup_system(
     });
 }
 
-
-fn get_value_for_key(key: &str, object: &JsValue) -> Option<JsValue> {
+fn get_value_for_key(
+    key: &str,
+    object: &JsValue,
+) -> Option<JsValue> {
     let key = JsValue::from(key);
     let value = Reflect::get(&object, &key).ok();
     value
@@ -115,15 +119,29 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
     let y = get_value_for_key("y", &js_obj).expect("Some y to be present");
     let rot = get_value_for_key("rot", &js_obj).expect("Some rot to be present");
 
-    info!("PLAYER_ADDED/MOVED {:?} {:?} {:?} {:?} {:?} {:?}", operation, uuid, address, x, y ,rot);
-
-    let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) || operation.eq(&JsValue::from(PLAYER_MOVED)) {
-        info!("PLAYER_ADDED/MOVED");
-        Some(RemoteStateType::PlayerMoved(RemoteGamePlayerState{
+    let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) {
+        info!("PLAYER_ADDED");
+        Some(RemoteStateType::PlayerAdded(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
-            position: Vec3::new(x.as_f64().unwrap() as f32, y.as_f64().unwrap() as f32, 0.0f32),
-            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32)
+            position: Vec3::new(
+                x.as_f64().unwrap() as f32,
+                y.as_f64().unwrap() as f32,
+                0.0f32,
+            ),
+            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
+        }))
+    } else if operation.eq(&JsValue::from(PLAYER_MOVED)) {
+        info!("PLAYER_MOVED");
+        Some(RemoteStateType::PlayerMoved(RemoteGamePlayerState {
+            uuid: uuid.as_string().unwrap(),
+            address: address.as_string().unwrap(),
+            position: Vec3::new(
+                x.as_f64().unwrap() as f32,
+                y.as_f64().unwrap() as f32,
+                0.0f32,
+            ),
+            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_REMOVED)) {
         info!("PLAYER_REMOVED");
@@ -134,15 +152,18 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
     } else if operation.eq(&JsValue::from(GAME_TOKENS_STATE_UPDATED)) {
         info!("GAME_TOKENS_STATE_UPDATED");
         None
-    } else { None };
+    } else {
+        None
+    };
 
     entity_state
 }
 
-fn entities_update_system(
+fn entities_from_blockchain_update_system(
     time: Res<Time>,
-    commands: Commands,
-    game_state: ResMut<RemoteGameState>
+    mut commands: Commands,
+    mut game_state: ResMut<RemoteGameState>,
+    game_textures: Res<GameTextures>,
 ) {
     GAME_ENTITY_UPDATE.with(|entities_update| {
         let entities_update = entities_update.take();
@@ -150,28 +171,55 @@ fn entities_update_system(
             let mapped_update = map_js_update_to_rust_entity_state(entity);
             match mapped_update {
                 Some(RemoteStateType::PlayerAdded(player_added)) => {
-                    // spawn new entity
-                },
-                Some(RemoteStateType::PlayerRemoved(player_removed)) => {
-                    // despawn enitty id
-                },
-                Some(RemoteStateType::PlayerMoved(player_moved)) => {
-                    
-                },
-                Some(RemoteStateType::TokenCollected(token_collected)) => {
-                    
-                },
+                    // add player to state and spawn new entity only if new player uuid                    
+                    if game_state
+                        .add_new_player(&player_added.uuid, player_added.clone())
+                        .is_none()
+                    {
+                        let player_texture = game_textures.player.clone();
+
+                        let spawned_remote_player = commands
+                            .spawn_bundle(SpriteBundle {
+                                texture: player_texture,
+                                transform: Transform {
+                                    translation: player_added.position,
+                                    rotation: player_added.rotation,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            })
+                            .insert(RemotePlayer)
+                            .insert(SpriteSize::from(PLAYER_SIZE))
+                            .insert(Movable {
+                                auto_despawn: false,
+                            })
+                            .insert(Velocity {
+                                linear: LINEAR_MOVEMENT_SPEED,
+                                rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
+                            })
+                            .insert(Blockchainable {
+                                address: player_added.address.clone(),
+                            })
+                            .insert(Identifyable(player_added.uuid.clone())).id();
+
+                        game_state.add_new_player_entity(&player_added.uuid, spawned_remote_player);
+                    }
+                }
+                Some(RemoteStateType::PlayerRemoved(player_to_remove_uuid)) => {
+                    game_state.remove_player(&player_to_remove_uuid);
+                    // despawn entity id
+                    if let Some(entity_id) = game_state.get_player_entity(&player_to_remove_uuid) {
+                        // despawn the remote player entity
+                        commands.entity(*entity_id).despawn();
+                    }
+                }
+                Some(RemoteStateType::PlayerMoved(player_moved)) => {}
+                Some(RemoteStateType::TokenCollected(token_collected)) => {}
                 Some(RemoteStateType::GameTokensUpdated(tokens_updated)) => {
-                    
-                },
-                None => {
 
                 }
+                None => {}
             }
         }
-
-        // spawn a new [player]/[token] etc.
-        //... or
-        // ... update [player]/[token] etc.
     });
 }

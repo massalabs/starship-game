@@ -37,50 +37,94 @@ pub enum RemoteStateType {
     PlayerRemoved(String),
     PlayerMoved(RemoteGamePlayerState),
     TokenCollected((String, String)),
-    GameTokensUpdated(Vec<RemoteCollectibleState>)
+    GameTokensUpdated(Vec<RemoteCollectibleState>),
 }
 
 #[derive(Clone)]
 pub struct RemoteGameState {
+    pub entity_players: BTreeMap<String, Entity>, // uuid - game entity
+    pub entity_collectibles: BTreeMap<String, Entity>, // uuid - game entity
     pub remote_players: BTreeMap<String, RemoteGamePlayerState>, //uuid - state mapping
     pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, //uuid - state mapping
 }
 
 impl RemoteGameState {
-    fn add_new_player(
+    pub fn add_new_player(
         &mut self,
-        uuid: String,
+        uuid: &str,
         player: RemoteGamePlayerState,
     ) -> Option<RemoteGamePlayerState> {
-        self.remote_players.insert(uuid, player)
+        self.remote_players.insert(uuid.to_owned(), player)
     }
 
-    fn remove_player(
+    pub fn add_new_player_entity(
         &mut self,
-        uuid: String,
-    ) -> Option<RemoteGamePlayerState> {
-        self.remote_players.remove(&uuid)
+        uuid: &str,
+        entity: Entity,
+    ) -> Option<Entity> {
+        self.entity_players.insert(uuid.to_owned(), entity)
     }
 
-    fn add_new_collectible(
+    pub fn get_player_entity(
+        &self,
+        uuid: &str,
+    ) -> Option<&Entity> {
+        self.entity_players.get(uuid)
+    }
+
+    pub fn remove_player(
         &mut self,
-        uuid: String,
+        uuid: &str,
+    ) {
+        self.remote_players.remove(uuid);
+        self.entity_players.remove(uuid);
+    }
+
+    pub fn clear_players(
+        &mut self,
+    ) {
+        self.remote_players.clear();
+    }
+
+    // ----------------------------------------
+
+    pub fn add_new_collectible(
+        &mut self,
+        uuid: &str,
         coll: RemoteCollectibleState,
     ) -> Option<RemoteCollectibleState> {
-        self.remote_collectibles.insert(uuid, coll)
+        self.remote_collectibles.insert(uuid.to_owned(), coll)
     }
 
-    fn remove_collectible(
+    pub fn add_new_collectible_entity(
         &mut self,
-        uuid: String,
-    ) -> Option<RemoteCollectibleState> {
-        self.remote_collectibles.remove(&uuid)
+        uuid: &str,
+        entity: Entity,
+    ) -> Option<Entity> {
+        self.entity_collectibles.insert(uuid.to_owned(), entity)
     }
+
+    pub fn remove_collectible(
+        &mut self,
+        uuid: &str,
+    ) {
+        self.remote_collectibles.remove(uuid);
+        self.entity_collectibles.remove(uuid);
+    }
+
+    pub fn clear_collectibles(
+        &mut self,
+    ) {
+        self.remote_collectibles.clear();
+    }
+
 }
 
 impl Default for RemoteGameState {
     fn default() -> Self {
         Self {
+            entity_players: BTreeMap::new(),
+            entity_collectibles: BTreeMap::new(),
             remote_players: BTreeMap::new(),
             remote_collectibles: BTreeMap::new(),
         }

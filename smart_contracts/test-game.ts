@@ -16,7 +16,8 @@ import { IDatastoreEntryInput,
     IContractData,
     IProvider,
     ProviderType,
-    IEventFilter} from "@massalabs/massa-web3";
+    IEventFilter,
+    INodeStatus} from "@massalabs/massa-web3";
 
 (async () => {
     const header = "=".repeat(process.stdout.columns - 1);
@@ -40,13 +41,12 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A1BXbydnqpJpSsqV29qyj6ztMLmfuoh1yP16udZrFxCqgfuDQPL";
-        const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
+        const scAddress = "A178zjYtJEYsg33yaEqUjB9azgfX567tT4rSF4jQKDLVwXieqhu";
+        const playerAddress = "A1bRCpbsr5RqRJ1852cCyZd39BD2jPHJC9TaFHHPUDtzLjQFM93";
         // ========================================================================= 
 
-
         // register player
-        /*
+       
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -61,6 +61,7 @@ import { IDatastoreEntryInput,
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
         
+        /*
         // await final state
         await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
 
@@ -75,6 +76,47 @@ import { IDatastoreEntryInput,
 
         console.log("REGISTER PLAYER EVENTS ", events);
         */
+
+        // ========================================================================= 
+
+        // poll sc events
+
+        /*
+        let nodeStatusInfo: INodeStatus|null|undefined = null;
+        try {
+          nodeStatusInfo = await web3Client.publicApi().getNodeStatus();
+        } catch(ex) {
+          console.log("Error getting node status");
+          throw ex;
+        }
+        const last_slot = (nodeStatusInfo as INodeStatus).last_slot;
+        const eventsFilter = {
+            start: last_slot,
+            end: null,
+            original_operation_id: null,
+            original_caller_address: null,
+            emitter_address: scAddress,
+            eventsNameRegex: null,
+            is_final: true // only listen for final game events here
+          } as IEventRegexFilter;
+      
+          const gameEventsPoller = EventPoller.startEventsPolling(
+            eventsFilter,
+            100,
+            web3Client
+          );
+          gameEventsPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
+              const update = events[events.length - 1];
+              console.log("BATCH LEN", events.length);
+              if (events.length <= 10) {
+                events.forEach((e) => console.log("DATA", e.data));
+              }
+              //console.log("EVENTS (LEN ---- UPDATE)", events.length, update);
+          });
+          gameEventsPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
+          */
+
+        
 
         // ========================================================================= 
 
@@ -112,7 +154,7 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get player pos
-        
+        /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -125,7 +167,7 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("DATA ", readTxId[0].output_events[0].data);
-        
+        */
 
         // ========================================================================= 
 
