@@ -283,12 +283,16 @@ export function removePlayer(address: string): void {
   // check the player has not been already registered
   assert(_isPlayerRegistered(addr));
 
-  // mark player as registered
+  // get player data
+  const playerState = playerStates.get(addr.toByteString());
+  const playerEntity = PlayerEntity.parseFromString(playerState as string);
+
+  // mark player as registered and delete all of its tokens and states
   registeredPlayers.delete(addr.toByteString());
   playerStates.delete(addr.toByteString());
   playerTokens.delete(addr.toByteString());
 
-  const eventMessage = _formatGameEvent(PLAYER_REMOVED, addr.toByteString());
+  const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.uuid);
 
   // send event from caller
   generateEvent(eventMessage);
