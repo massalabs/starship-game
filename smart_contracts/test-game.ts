@@ -41,12 +41,26 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A178zjYtJEYsg33yaEqUjB9azgfX567tT4rSF4jQKDLVwXieqhu";
+        const scAddress = "A12syQjT2PARsddUzMqtUAzYpHibCjeTBZnQzv1r7RH8m881L2X4";
         const playerAddress = "A1bRCpbsr5RqRJ1852cCyZd39BD2jPHJC9TaFHHPUDtzLjQFM93";
         // ========================================================================= 
 
+        const readTxData = await web3Client.smartContracts().readSmartContract({
+            fee: 0,
+            maxGas: 200000,
+            simulatedGasPrice: 0,
+            targetAddress: scAddress,
+            targetFunction: "getCollectiblesState",
+            parameter: "",
+            callerAddress: playerAddress
+        } as IReadData);
+        readTxData[0].output_events[0].data.split("@").map(event => {
+            console.log(event);
+        })
+        // ============================================
+
         // register player
-       
+       /*
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -60,8 +74,7 @@ import { IDatastoreEntryInput,
         } as ICallData);
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
-        
-        /*
+
         // await final state
         await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
 
@@ -114,7 +127,7 @@ import { IDatastoreEntryInput,
               //console.log("EVENTS (LEN ---- UPDATE)", events.length, update);
           });
           gameEventsPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));
-          */
+        */
 
         
 

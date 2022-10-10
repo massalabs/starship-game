@@ -26,21 +26,31 @@ import {GameEvent} from './gameEvent';
 const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
 const REGISTERED_PLAYERS_STATES_MAP_KEY = 'registered_players_states_key';
 const REGISTERED_PLAYERS_TOKENS_MAP_KEY = 'registered_players_tokens_key';
+const GENERATED_TOKENS_MAP_KEY = 'generated_tokens_key';
 const OWNER_ADDRESS_KEY = 'owner_key';
 const LAST_SLOT_INDEX_KEY = 'last_slot_index_key';
 const TOKEN_ADDRESS_KEY = 'token_address_key';
-const COLLECTIBLE_TOKENS_STATE_KEY = 'state_key';
+const GENERATED_TOKENS_COUNT_KEY = 'state_key';
 const SCREEN_WIDTH_KEY = 'screen_width_key';
 const SCREEN_HEIGHT_KEY = 'screen_height_key';
 
 // events
+
+// game owner
 const TOKEN_ADDRESS_ADDED = 'TOKEN_ADDRESS_ADDED';
 const GAME_OWNER_ADDRESS_ADDED = 'GAME_OWNER_ADDRESS_ADDED';
+
+// player
 const PLAYER_ADDED = 'PLAYER_ADDED';
 const PLAYER_REMOVED = 'PLAYER_REMOVED';
 const PLAYER_MOVED = 'PLAYER_MOVED';
-const GAME_TOKENS_STATE_UPDATED = 'GAME_TOKENS_STATE_UPDATED';
+
+// tokens
+const TOKEN_ADDED = 'TOKEN_ADDED';
+const TOKEN_REMOVED = 'TOKEN_REMOVED';
 const TOKEN_COLLECTED = 'TOKEN_COLLECTED';
+
+// screen
 const SCREEN_WIDTH_ADJUSTED = 'SCREEN_WIDTH_ADJUSTED';
 const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 
@@ -48,9 +58,9 @@ const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 const PLAYER_REWARD_IN_TOKENS: u64 = 1;
 const THREADS: u8 = 32;
 const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 100;
-const TOTAL_RANDOM_TOKENS: u16 = 10;
-const COLLECTIBLE_BOUNDING_BOX: f32 = 20.0;
-const PLAYER_BOUNDING_BOX: f32 = 30.0;
+const TOTAL_ONSCREEN_TOKENS: u16 = 10;
+const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
+const PLAYER_BOUNDING_BOX: f32 = 64.0;
 const COLLECTIBLE_VALUE: Amount = new Amount(1);
 const COLLECTIONS_SEPARATOR: string = '@';
 
@@ -67,6 +77,11 @@ export const playerStates = new collections.PersistentMap<string, string>(
 // registered players tokens map
 export const playerTokens = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKENS_MAP_KEY
+);
+
+// generated tokens map
+export const generatedTokens = new collections.PersistentMap<u16, string>(
+    GENERATED_TOKENS_MAP_KEY
 );
 
 /**
@@ -370,11 +385,12 @@ export function getPlayerTokens(address: string): string {
  * @return {string} - the stringified massa tokens state.
  */
 export function getCollectiblesState(_args: string): string {
-  assert(
-      Storage.has(COLLECTIBLE_TOKENS_STATE_KEY),
-      'Massa Tokens State not set'
-  );
-  const res = Storage.get(COLLECTIBLE_TOKENS_STATE_KEY);
+  const generatedRandomTokens: Array<string> = [];
+  for (let tokenIndex: u16 = 0; tokenIndex < TOTAL_ONSCREEN_TOKENS; tokenIndex++) {
+    const randomCollectibleEntity = generatedTokens.get(tokenIndex);
+    generatedRandomTokens.push(randomCollectibleEntity as string);
+  }
+  const res = generatedRandomTokens.join('@');
   generateEvent(`${res}`);
   return res;
 }
@@ -439,11 +455,9 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
       playerPos.y - playerPos.cbox
   );
 
-  const gameState = Storage.get(COLLECTIBLE_TOKENS_STATE_KEY).split(COLLECTIONS_SEPARATOR);
-
-  for (let i = 0; i < gameState.length; i++) {
+  for (let i: u16 = 0; i < TOTAL_ONSCREEN_TOKENS; i++) {
     const collectibleEntity = CollectibleEntity.parseFromString(
-        gameState[i]
+        <string>generatedTokens.get(i)
     );
     const collectibleCbox = new Rectangle(
         collectibleEntity.x - collectibleEntity.cbox,
@@ -564,6 +578,35 @@ export function initLastSlotIndex(_args: string): void {
 }
 
 /**
+ * Stop creating collectibles.
+ *
+ * @param {string} _args - ?.
+ */
+export function initGeneratedGameTokens(_args: string): void {
+  // check that the caller is the game owner
+  assert(_assertGameOwner(Context.caller()));
+
+  // init tokens count
+  if (!Storage.has(GENERATED_TOKENS_COUNT_KEY)) {
+    Storage.set(GENERATED_TOKENS_COUNT_KEY, '0');
+  }
+
+  // get screen width/height
+  const screenWidth = Storage.get(SCREEN_WIDTH_KEY);
+  const screenWidthF32: f64 = parseFloat(screenWidth);
+
+  const screenHeight = Storage.get(SCREEN_HEIGHT_KEY);
+  const screenHeightF32: f64 = parseFloat(screenHeight);
+
+  // generate initial tokens
+  for (let tokenIndex: u16 = 0; tokenIndex < TOTAL_ONSCREEN_TOKENS; tokenIndex++) {
+    const randomCollectibleEntity: CollectibleEntity = _generateRandomCollectible(screenWidthF32, screenHeightF32);
+    generatedTokens.set(tokenIndex, randomCollectibleEntity.serializeToString());
+  }
+  Storage.set(GENERATED_TOKENS_COUNT_KEY, TOTAL_ONSCREEN_TOKENS.toString());
+}
+
+/**
  * Player collects a token.
  *
  * @param {string} _args - Self-calling function for generating collectibles.
@@ -598,14 +641,29 @@ export function asyncCreateCollectibles(_args: string): void {
   }
   Storage.set(LAST_SLOT_INDEX_KEY, curSlotIndex.toString());
 
-  // generate a new state
-  const newState = _generateNewRandomTokenState();
+  // get screen width/height
+  const screenWidth = Storage.get(SCREEN_WIDTH_KEY);
+  const screenWidthF32: f64 = parseFloat(screenWidth);
 
-  // save new state
-  Storage.set(COLLECTIBLE_TOKENS_STATE_KEY, newState);
+  const screenHeight = Storage.get(SCREEN_HEIGHT_KEY);
+  const screenHeightF32: f64 = parseFloat(screenHeight);
 
-  // send to all players
-  _generateEvent(_formatGameEvent(GAME_TOKENS_STATE_UPDATED, newState));
+  // update some random tokens with new ones
+  const tokensToUpdate = _randomUintInRange(TOTAL_ONSCREEN_TOKENS);
+  for (let i: u16 = 0; i < tokensToUpdate; i++) {
+    const randomCollectibleEntity: CollectibleEntity = _generateRandomCollectible(screenWidthF32, screenHeightF32);
+    const tokenIndex = _randomUintInRange(TOTAL_ONSCREEN_TOKENS - 1);
+
+    // get old token at index
+    const oldTokenAtIndex = generatedTokens.get(tokenIndex as u16);
+    // send update to all players
+    _generateEvent(_formatGameEvent(TOKEN_REMOVED, oldTokenAtIndex as string));
+
+    // generate a new token at random index and overwrite the old one
+    generatedTokens.set(tokenIndex as u16, randomCollectibleEntity.serializeToString());
+    // send update to all players
+    _generateEvent(_formatGameEvent(TOKEN_ADDED, randomCollectibleEntity.serializeToString()));
+  }
 
   // emit wakeup message
   let nextThread = 31 as u8; // choose max. delay
@@ -644,8 +702,8 @@ export function asyncCreateCollectibles(_args: string): void {
  * @return {CollectibleEntity}- Position of the new massa token.
  */
 function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): CollectibleEntity {
-  const randomX: f32 = (<f32>_randomInRange(<f32>(screenWidth)));
-  const randomY: f32 = (<f32>_randomInRange(<f32>(screenHeight)));
+  const randomX: f32 = (<f32>_randomCoordInRange(<f32>(screenWidth/2.0)));
+  const randomY: f32 = (<f32>_randomCoordInRange(<f32>(screenHeight/2.0)));
 
   const posArgs: CollectibleEntity = {
     uuid: _generateUuid(),
@@ -658,45 +716,32 @@ function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): Collec
 }
 
 /**
- * Generates a new random tokens state.
- *
- * @return {string}- stringified new tokens state.
- */
-function _generateNewRandomTokenState(): string {
-  // get screen width/height
-  const screenWidth = Storage.get(SCREEN_WIDTH_KEY);
-  const screenWidthF32: f64 = parseFloat(screenWidth);
-
-  const screenHeight = Storage.get(SCREEN_HEIGHT_KEY);
-  const screenHeightF32: f64 = parseFloat(screenHeight);
-
-  // generate new random tokens
-  let numTokens: u16 = 0;
-  const generatedRandomTokens: Array<string> = [];
-  while (numTokens < TOTAL_RANDOM_TOKENS) {
-    const randomCollectibleEntity: CollectibleEntity =
-      _generateRandomCollectible(screenWidthF32, screenHeightF32);
-    generatedRandomTokens.push(randomCollectibleEntity.serializeToString());
-    numTokens++;
-  }
-  return generatedRandomTokens.join('@');
-}
-
-/**
  * Generates a random value with a limiting upper range.
  *
  * @param {f32} range - limiting range.
  * @return {f32}- value scaled in range.
  */
-function _randomInRange(range: f32): f32 {
+function _randomCoordInRange(range: f32): f32 {
   const absRange = <i64>Math.abs(range);
   const random: i64 = unsafeRandom();
   const mod = random % absRange;
   if (random > 0) {
     return <f32>Math.abs(<f64>mod);
   } else {
-    return <f32>Math.abs(<f64>mod) * 1.0; // <f32>Math.abs(<f64>mod) * -1.0 depending on the axis
+    return <f32>Math.abs(<f64>mod) * -1.0; // <f32>Math.abs(<f64>mod) * -1.0 depending on the axis
   }
+}
+
+/**
+ * Generates a random value with a limiting upper range.
+ *
+ * @param {i64} range - limiting range.
+ * @return {u64}- value scaled in range.
+ */
+function _randomUintInRange(range: i64): u64 {
+  const random: i64 = unsafeRandom();
+  const mod = random % range;
+  return <u64>Math.abs(<f64>mod);
 }
 
 /**

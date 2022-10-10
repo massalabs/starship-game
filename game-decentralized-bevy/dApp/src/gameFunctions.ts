@@ -1,5 +1,6 @@
 import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IEventFilter, INodeStatus, IReadData } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./PlayerEntity";
+import { ITokenOnchainEntity } from "./TokenEntity";
 import { IState } from "./WasmDappGame";
 
 export const registerPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {
@@ -101,7 +102,23 @@ export const getPlayerBalance = async (web3Client: Client, gameAddress: string, 
         parameter: playerAddress,
         callerAddress: playerAddress
     } as IReadData);
-    return parseInt(readTxData[0].output_events[0].data, 100);
+    return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+export const getCollectiblesState = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<ITokenOnchainEntity>> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getCollectiblesState",
+      parameter: "",
+      callerAddress: playerAddress
+  } as IReadData);
+
+  return readTxData[0].output_events[0].data.split("@").map(event => {
+    return JSON.parse(event) as ITokenOnchainEntity
+  });
 }
 
 const formatNumbersToDecimalPrecision = (input: any): string => {

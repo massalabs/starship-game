@@ -10,10 +10,11 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain } from "./gameFunctions";
+import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain, getCollectiblesState } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { generateThreadAddressesMap } from "./utils";
 import { GameEntityUpdate } from "./GameEntity";
+import { ITokenOnchainEntity } from "./TokenEntity";
 
 const wait = async (timeMilli: number): Promise<void> => {
 	return new Promise<void>((resolve, reject) => {
@@ -35,22 +36,24 @@ const providers = [
   } as IProvider
 ];
 
-// game events
+// game player events
 const PLAYER_MOVED = "PLAYER_MOVED";
-const GAME_TOKENS_STATE_UPDATED = "GAME_TOKENS_STATE_UPDATED";
 const PLAYER_ADDED = "PLAYER_ADDED";
 const PLAYER_REMOVED = "PLAYER_REMOVED";
-const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
+// game token events
+const TOKEN_ADDED = "TOKEN_ADDED";
+const TOKEN_REMOVED = "TOKEN_REMOVED";
+const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
 // settings consts
 const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 500; // ms = 0.5 secs. Every half a sec update the player pos on chain
-const GAME_EVENTS_POLLING_INTERVAL = 500; // 500 ms = 0.5 sec.
+const GAME_EVENTS_POLLING_INTERVAL = 100; // 500 ms = 0.5 sec.
 const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
 // addresses consts
-const GAME_ADDRESS = "A178zjYtJEYsg33yaEqUjB9azgfX567tT4rSF4jQKDLVwXieqhu"; //process.env.REACT_APP_SC_ADDRESS ||
+const GAME_ADDRESS = "A1YtPL4DwdtBXp2Qcm6FCwX4ePFPPq1oQhMKBEnaR3buxLTgDYf"; //process.env.REACT_APP_SC_ADDRESS ||
 const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
 const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
 
@@ -158,6 +161,19 @@ export default class WasmDappExample extends Component<IProps, IState> {
       }
     }
 
+    // get collectibles initial state and send it to the game engine
+    let tokensInitialState: Array<ITokenOnchainEntity> = [];
+    try {
+      tokensInitialState = await getCollectiblesState(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
+    } catch (ex) {
+      console.error("Error getting tokens initial state...", ex);
+    }
+    const tokensGameUpdate = tokensInitialState.map(tokenEntity => {
+      const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+      return gameEntity;
+    })
+    game.push_game_entity_updates(tokensGameUpdate);
+
     // TODO: set game state if we have bc coordinates
 
     // update react state
@@ -225,8 +241,8 @@ export default class WasmDappExample extends Component<IProps, IState> {
           const eventMessageData = gameEvent?.data.split("=");
           const eventName = eventMessageData.at(0);
           const eventData = eventMessageData.at(1);
-          console.log("EVENT NAME", eventName);
-          console.log("EVENT DATA", eventData);
+          //console.log("EVENT NAME", eventName);
+          //console.log("EVENT DATA", eventData);
           switch (eventName) {
             case PLAYER_MOVED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
@@ -271,7 +287,16 @@ export default class WasmDappExample extends Component<IProps, IState> {
             case TOKEN_COLLECTED: {
               break;
             }
-            case GAME_TOKENS_STATE_UPDATED: {
+            case TOKEN_ADDED: {
+              const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
+              const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+              game.push_game_entity_updates([gameEntity]);
+              break;
+            }
+            case TOKEN_REMOVED: {
+              const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
+              const gameEntity = new GameEntityUpdate(TOKEN_REMOVED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+              game.push_game_entity_updates([gameEntity]);
               break;
             }
             default: {

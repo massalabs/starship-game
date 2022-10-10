@@ -34,10 +34,11 @@ pub struct RemoteCollectibleState {
 #[derive(Clone, Debug)]
 pub enum RemoteStateType {
     PlayerAdded(RemoteGamePlayerState),
-    PlayerRemoved(String),
+    PlayerRemoved(String), //uuid
     PlayerMoved(RemoteGamePlayerState),
-    TokenCollected((String, String)),
-    GameTokensUpdated(Vec<RemoteCollectibleState>),
+    TokenCollected((String, String)), // token uuid - player uuid
+    TokenAdded(RemoteCollectibleState),
+    TokenRemoved(RemoteCollectibleState), // uuid
 }
 
 #[derive(Clone)]
@@ -80,9 +81,7 @@ impl RemoteGameState {
         self.entity_players.remove(uuid);
     }
 
-    pub fn clear_players(
-        &mut self,
-    ) {
+    pub fn clear_players(&mut self) {
         self.remote_players.clear();
     }
 
@@ -112,12 +111,16 @@ impl RemoteGameState {
         self.entity_collectibles.remove(uuid);
     }
 
-    pub fn clear_collectibles(
-        &mut self,
-    ) {
-        self.remote_collectibles.clear();
+    pub fn get_collectible_entity(
+        &self,
+        uuid: &str,
+    ) -> Option<&Entity> {
+        self.entity_collectibles.get(uuid)
     }
 
+    pub fn clear_collectibles(&mut self) {
+        self.remote_collectibles.clear();
+    }
 }
 
 impl Default for RemoteGameState {
