@@ -155,8 +155,17 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_REMOVED)) {
-        //info!("PLAYER_REMOVED");
-        None
+        info!("PLAYER_REMOVED");
+        Some(RemoteStateType::PlayerRemoved(RemoteGamePlayerState {
+            uuid: uuid.as_string().unwrap(),
+            address: address.as_string().unwrap(),
+            position: Vec3::new(
+                x.as_f64().unwrap() as f32,
+                y.as_f64().unwrap() as f32,
+                0.0f32,
+            ),
+            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
+        }))
     } else if operation.eq(&JsValue::from(TOKEN_COLLECTED)) {
         //info!("TOKEN_COLLECTED");
         None
@@ -232,14 +241,14 @@ fn entities_from_blockchain_update_system(
                         game_state.add_new_player_entity(&player_added.uuid, spawned_remote_player);
                     }
                 }
-                Some(RemoteStateType::PlayerRemoved(player_to_remove_uuid)) => {
+                Some(RemoteStateType::PlayerRemoved(player_to_remove)) => {
                     // despawn entity id
-                    if let Some(entity_id) = game_state.get_player_entity(&player_to_remove_uuid) {
+                    if let Some(entity_id) = game_state.get_player_entity(&player_to_remove.uuid) {
                         // despawn the remote player entity
                         commands.entity(*entity_id).despawn();
                     }
                     // remove player from all collection states
-                    game_state.remove_player(&player_to_remove_uuid);
+                    game_state.remove_player(&player_to_remove.uuid);
                 }
                 Some(RemoteStateType::PlayerMoved(player_moved)) => { /* TODO */ }
                 Some(RemoteStateType::TokenCollected(token_collected)) => { /* TODO */ }

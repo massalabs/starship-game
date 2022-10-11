@@ -34,7 +34,7 @@ pub struct RemoteCollectibleState {
 #[derive(Clone, Debug)]
 pub enum RemoteStateType {
     PlayerAdded(RemoteGamePlayerState),
-    PlayerRemoved(String), //uuid
+    PlayerRemoved(RemoteGamePlayerState), //uuid
     PlayerMoved(RemoteGamePlayerState),
     TokenCollected((String, String)), // token uuid - player uuid
     TokenAdded(RemoteCollectibleState),

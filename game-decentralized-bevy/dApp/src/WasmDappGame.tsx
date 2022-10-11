@@ -53,7 +53,7 @@ const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
 // addresses consts
-const GAME_ADDRESS = "A1YtPL4DwdtBXp2Qcm6FCwX4ePFPPq1oQhMKBEnaR3buxLTgDYf"; //process.env.REACT_APP_SC_ADDRESS ||
+const GAME_ADDRESS = "A1fTDXRPUjsFS5L43cc2oBKt42aQDm8Wg8T9pW5zxGgpcWka41V"; //process.env.REACT_APP_SC_ADDRESS ||
 const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
 const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
 
@@ -282,6 +282,14 @@ export default class WasmDappExample extends Component<IProps, IState> {
               break;
             }
             case PLAYER_REMOVED: {
+              const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
+              console.log("Player removed ", playerEntity);
+              // update game engine state
+              const gameEntity = new GameEntityUpdate(PLAYER_REMOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              game.push_game_entity_updates([gameEntity]);
+              toast(`Player ${playerEntity.uuid} disconnected!`,{
+                className: "toast"
+              });
               break;
             }
             case TOKEN_COLLECTED: {
@@ -369,62 +377,62 @@ export default class WasmDappExample extends Component<IProps, IState> {
               >
                 <div>
                   <TextField
-                      id="outlined-name3"
+                      id="txt-field-tokens-collected"
                       label="Tokens Collected"
-                      value={this.state.playerOnchainState?.tokensCollected}
+                      value={this.state.playerOnchainState ? this.state.playerOnchainState.tokensCollected : "0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
-                      id="outlined-name4"
+                      id="txt-field-tokens-balance"
                       label="Tokens Balance"
-                      value={0}
+                      value={this.state.playerOnchainState ? this.state.playerOnchainState.tokensCollected : "0"}
                       disabled={true}
                       variant="filled"
                   />
                 </div>
                 <div>
                   <TextField
-                      id="outlined-name1"
+                      id="txt-field-game-x"
                       label="Game X Pos"
-                      value={this.state.playerGameState?.x}
+                      value={this.state.playerGameState ? this.state.playerGameState.x : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
-                      id="outlined-name2"
+                      id="txt-field-game-y"
                       label="Game Y Pos"
-                      value={this.state.playerGameState?.y}
+                      value={this.state.playerGameState ? this.state.playerGameState.y : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
-                      id="outlined-name2"
+                      id="txt-field-game-rot"
                       label="Game Rot Pos"
-                      value={this.state.playerGameState?.rot}
+                      value={this.state.playerGameState ? this.state.playerGameState.rot : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
                 </div>
                 <div>
                   <TextField
-                      id="outlined-name3"
+                      id="txt-field-massa-x"
                       label="Massa X Pos"
-                      value={this.state.playerOnchainState?.x}
+                      value={this.state.playerOnchainState ? this.state.playerOnchainState.x : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
-                      id="outlined-name4"
+                      id="txt-field-massa-y"
                       label="Massa Y Pos"
-                      value={this.state.playerOnchainState?.y}
+                      value={this.state.playerOnchainState ? this.state.playerOnchainState.y : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
-                      id="outlined-name4"
+                      id="txt-field-massa-rot"
                       label="Massa Rot Pos"
-                      value={this.state.playerOnchainState?.rot}
+                      value={this.state.playerOnchainState ? this.state.playerOnchainState.rot : "0.0"}
                       disabled={true}
                       variant="filled"
                   />

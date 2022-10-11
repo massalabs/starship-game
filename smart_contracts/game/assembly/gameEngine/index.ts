@@ -305,9 +305,11 @@ export function removePlayer(address: string): void {
   // mark player as registered and delete all of its tokens and states
   registeredPlayers.delete(addr.toByteString());
   playerStates.delete(addr.toByteString());
-  playerTokens.delete(addr.toByteString());
+  if (playerTokens.get(addr.toByteString())) {
+    playerTokens.delete(addr.toByteString());
+  }
 
-  const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.uuid);
+  const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.serializeToString());
 
   // send event from caller
   generateEvent(eventMessage);

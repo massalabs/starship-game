@@ -41,10 +41,11 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12syQjT2PARsddUzMqtUAzYpHibCjeTBZnQzv1r7RH8m881L2X4";
-        const playerAddress = "A1bRCpbsr5RqRJ1852cCyZd39BD2jPHJC9TaFHHPUDtzLjQFM93";
+        const scAddress = "A1fTDXRPUjsFS5L43cc2oBKt42aQDm8Wg8T9pW5zxGgpcWka41V";
+        const playerAddress = "A17iXLYDiRxxjEKpvJNMdbSiTEhrxYzvAUq1dE1E2vF7FyuMck5";
         // ========================================================================= 
 
+        /*
         const readTxData = await web3Client.smartContracts().readSmartContract({
             fee: 0,
             maxGas: 200000,
@@ -57,6 +58,7 @@ import { IDatastoreEntryInput,
         readTxData[0].output_events[0].data.split("@").map(event => {
             console.log(event);
         })
+        */
         // ============================================
 
         // register player
@@ -89,6 +91,39 @@ import { IDatastoreEntryInput,
 
         console.log("REGISTER PLAYER EVENTS ", events);
         */
+
+        // ============================================
+
+        // remove player
+       
+        console.log(`Calling smart contract function...`);
+        const callTxId = await web3Client.smartContracts().callSmartContract({
+            fee: 0,
+            gasPrice: 0,
+            maxGas: 200000,
+            parallelCoins: 0,
+            sequentialCoins: 0,
+            targetAddress: scAddress,
+            functionName: "removePlayer",
+            parameter: playerAddress,
+        } as ICallData);
+        const callScOperationId = callTxId[0];
+        console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
+
+        // await final state
+        await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
+
+        // poll events
+        const events = await EventPoller.getEventsOnce({
+            start: null,
+            end: null,
+            original_operation_id: callScOperationId,
+            original_caller_address: null,
+            emitter_address: null,
+        } as IEventFilter, web3Client);
+
+        console.log("REMOVE PLAYER EVENTS ", events);
+        
 
         // ========================================================================= 
 
