@@ -37,3 +37,6 @@ pub struct LocalPlayer;
 
 #[derive(Component, Clone, Debug)]
 pub struct RemotePlayer;
+
+#[derive(Component, Clone, Debug)]
+pub struct RequiresKinematicUpdate(pub String); // the uuid

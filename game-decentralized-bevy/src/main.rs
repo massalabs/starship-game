@@ -1,9 +1,10 @@
 use crate::resources::RemoteGamePlayerState;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use components::{
     Blockchainable, Collectible, Identifyable, LocalPlayer, Movable, RemotePlayer, SpriteSize,
-    Velocity,
+    Velocity, RequiresKinematicUpdate,
 };
 use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
@@ -65,10 +66,13 @@ fn main() {
         ..Default::default()
     });
     app.add_plugins(DefaultPlugins);
+    //app.add_plugin(LogDiagnosticsPlugin::default());
+    //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
     app.add_plugin(PlayerPlugin);
     //app.add_startup_system(setup_system);
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
     app.add_system(entities_from_blockchain_update_system);
+    app.add_system(only_entities_with_kinematic_update);
     app.run();
 }
 
@@ -250,7 +254,19 @@ fn entities_from_blockchain_update_system(
                     // remove player from all collection states
                     game_state.remove_player(&player_to_remove.uuid);
                 }
-                Some(RemoteStateType::PlayerMoved(player_moved)) => { /* TODO */ }
+                Some(RemoteStateType::PlayerMoved(player_moved)) => {
+
+                    // check to see if the player has an entity id already (is registered). If not, skip update
+                    if let Some(player) = game_state.entity_players.get(&player_moved.uuid) {
+                        // add a component
+                        commands.entity(*player).insert(RequiresKinematicUpdate(player_moved.uuid.clone()));
+                    }
+
+                    if let Some(_player) = game_state.remote_players.get(&player_moved.uuid) {
+                        // update the inner state
+                        game_state.remote_players.insert(player_moved.uuid.clone(), player_moved.clone());
+                    }
+                }
                 Some(RemoteStateType::TokenCollected(token_collected)) => { /* TODO */ }
                 Some(RemoteStateType::TokenAdded(token_added)) => {
                     let mut spawn_collectible_closure = |collectible_texture: Handle<Image>,
@@ -294,4 +310,20 @@ fn entities_from_blockchain_update_system(
             }
         }
     });
+}
+
+fn only_entities_with_kinematic_update(
+    mut commands: Commands,
+    game_state: Res<RemoteGameState>,
+    mut query: Query<(Entity, &mut Transform, &RequiresKinematicUpdate), (With<RequiresKinematicUpdate>, With<RemotePlayer>)>,
+) {
+    for (entity, mut transform, kinematic_update) in query.iter_mut() {
+        info!("MOVING REMOTE ENTITYYYYYYY {:?}", entity);
+        if let Some(player_updated_state) = game_state.remote_players.get(&kinematic_update.0) {
+            transform.translation = player_updated_state.position;
+            transform.rotation = player_updated_state.rotation;
+        }
+        // remove the component RequiresKinematicUpdate
+        commands.entity(entity).remove::<RequiresKinematicUpdate>();
+    }
 }

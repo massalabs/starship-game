@@ -41,8 +41,8 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A1fTDXRPUjsFS5L43cc2oBKt42aQDm8Wg8T9pW5zxGgpcWka41V";
-        const playerAddress = "A17iXLYDiRxxjEKpvJNMdbSiTEhrxYzvAUq1dE1E2vF7FyuMck5";
+        const scAddress = "A1HQURdHKQyCDaun6dQ7eQw8LPt1vHo8xBQZMqGsp1EF9d7HAtV";
+        const playerAddress = "A12thhcEbzPJHw5vyKyJ3Kx3Y6EsvYbeopg6Vg9V8u52mbo2PVqG";
         // ========================================================================= 
 
         /*
@@ -128,7 +128,6 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // poll sc events
-
         /*
         let nodeStatusInfo: INodeStatus|null|undefined = null;
         try {
@@ -179,7 +178,7 @@ import { IDatastoreEntryInput,
             sequentialCoins: 0,
             targetAddress: scAddress,
             functionName: "setAbsCoors",
-            parameter: `{"uuid":"uuid-1205432386623302912","address":"A1vEpk323ApQe49fc62BFCFQWATKV5pg1XaXVDg839WRi435HLu","x":1.0,"y":2.0,"rot":90.0,"cbox":30.0,"tokensCollected":0.0}`,
+            parameter: `{"uuid":"uuid-9016063961940463616","address":"A12thhcEbzPJHw5vyKyJ3Kx3Y6EsvYbeopg6Vg9V8u52mbo2PVqG","x":-200.0,"y":200.0,"rot":90.0,"cbox":64.0,"tokensCollected":0.0}`,
         } as ICallData);
         const callScOperationId = callTxId[0];
         console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
