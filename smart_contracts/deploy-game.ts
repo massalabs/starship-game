@@ -273,7 +273,7 @@ prompt.get(schema, async (err, result) => {
 		// compile template
 		let initScTemplate = Handlebars.compile(templateContents);
 		// render template
-		let renderedTemplate = initScTemplate({ tokenAddress, gameAddress: gameScAddress });
+		let renderedTemplate = initScTemplate({ tokenAddress: tokenAddress, gameAddress: gameScAddress });
 		// write contents to a file
 		fs.writeFileSync(RUNNER_SC, renderedTemplate, { flag: "w+" });
 

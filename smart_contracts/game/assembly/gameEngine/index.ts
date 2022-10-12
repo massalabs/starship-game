@@ -15,7 +15,7 @@ import {
   collections,
   env,
 } from '@massalabs/massa-as-sdk/assembly';
-import {Amount, Currency} from '@massalabs/as/assembly';
+import {Amount} from '@massalabs/as/assembly';
 import {Rectangle, _isIntersection} from './rectangle';
 import {PlayerEntity} from './playerEntity';
 import {CollectibleEntity} from './collectibleEntity';
@@ -55,7 +55,6 @@ const SCREEN_WIDTH_ADJUSTED = 'SCREEN_WIDTH_ADJUSTED';
 const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 
 // settings
-const PLAYER_REWARD_IN_TOKENS: u64 = 1;
 const THREADS: u8 = 32;
 const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 100;
 const TOTAL_ONSCREEN_TOKENS: u16 = 10;
@@ -269,7 +268,6 @@ export function registerPlayer(address: string): void {
     y: 0.0,
     rot: 90.0,
     cbox: PLAYER_BOUNDING_BOX,
-    tokensCollected: 0.0 as f32,
   } as PlayerEntity;
   const serializedPlayerData: string = playerEntity.serializeToString();
   playerStates.set(addr.toByteString(), serializedPlayerData);
@@ -366,17 +364,47 @@ export function getPlayerPos(address: string): string {
 }
 
 /**
- * Returns the player tokens.
+ * Player collects a token.
  *
  * @param {string} address - Address of the player.
- * @return {string} - the player tokens (stringified).
+ * @return {string} - the player balance (stringified).
  */
 export function getPlayerTokens(address: string): string {
-  // get player tokens
+  // read player address
   const playerAddress = Address.fromByteString(address);
   // check that player is already registered
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
-  const res = <string>playerTokens.get(playerAddress.toByteString());
+  // get player tokens from collections
+  const tokens = playerTokens.get(playerAddress.toByteString());
+  let tokenCount = 0;
+  if (tokens) {
+    tokenCount = tokens.split('@').length;
+  }
+  // return player tokens
+  generateEvent(`${tokenCount.toString()}`);
+  return tokenCount.toString();
+}
+
+/**
+ * Player collects a token.
+ *
+ * @param {string} address - Address of the player.
+ * @return {string} - the player balance (stringified).
+ */
+export function getPlayerBalance(address: string): string {
+  // read player address
+  const playerAddress = Address.fromByteString(address);
+  // check that player is already registered
+  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
+  // assert token address is set
+  assert(Storage.has(TOKEN_ADDRESS_KEY), 'Token address not set');
+  // read token address
+  const tokenAddress = Address.fromByteString(Storage.get(TOKEN_ADDRESS_KEY));
+
+  // get massa coin impl wrapper
+  const collToken = new token.TokenWrapper(tokenAddress);
+  // return player balance
+  const res = collToken.balanceOf(playerAddress).value().toString();
   generateEvent(`${res}`);
   return res;
 }
@@ -438,7 +466,7 @@ export function moveByInc(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  _checkTokenCollected(storedPlayerEntity);
+  // _checkTokenCollected(storedPlayerEntity);
 
   // send event to all players
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerEntity));
@@ -512,49 +540,11 @@ function _playerCollectibleClaim(
     collectibleValue: Amount
 ): void {
   // transfer token to player
-  const amount = new Amount(PLAYER_REWARD_IN_TOKENS, new Currency());
   const tokenAddress = Address.fromByteString(Storage.get(TOKEN_ADDRESS_KEY));
   // get collectible impl wrapper
   const collToken = new token.TokenWrapper(tokenAddress);
   // token transfers X amount to player
-  collToken.transfer(playerAddress, amount);
-
-  // get player data
-  const player = <string>playerStates.get(playerAddress.toByteString());
-  const playerEntity = PlayerEntity.parseFromString(<string>player);
-
-  // increase the collected tokens balance
-  playerEntity.tokensCollected = playerEntity.tokensCollected + <f32>collectibleValue.value();
-
-  // update storage
-  playerStates.set(
-      playerEntity.address,
-      playerEntity.serializeToString()
-  );
-}
-
-/**
- * Player collects a token.
- *
- * @param {string} address - Address of the player.
- * @return {string} - the player balance (stringified).
- */
-export function getPlayerBalance(address: string): string {
-  // read player address
-  const playerAddress = Address.fromByteString(address);
-  // check that player is already registered
-  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
-  // assert token address is set
-  assert(Storage.has(TOKEN_ADDRESS_KEY), 'Token address not set');
-  // read token address
-  const tokenAddress = Address.fromByteString(Storage.get(TOKEN_ADDRESS_KEY));
-
-  // get massa coin impl wrapper
-  const collToken = new token.TokenWrapper(tokenAddress);
-  // return player balance
-  const res = collToken.balanceOf(playerAddress).value().toString();
-  generateEvent(`${res}`);
-  return res;
+  collToken.transfer(playerAddress, collectibleValue);
 }
 
 /**

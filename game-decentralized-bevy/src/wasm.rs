@@ -148,7 +148,7 @@ thread_local!(pub static GAME_ENTITY_UPDATE: RefCell<Vec<GameEntityUpdate>> = Re
 #[wasm_bindgen]
 pub fn push_game_entity_updates(updated_entities: Vec<GameEntityUpdate>) {
     GAME_ENTITY_UPDATE.with(|pos| {
-        let entities_updated = updated_entities.len();
+        //let entities_updated = updated_entities.len();
         pos.borrow_mut().extend(updated_entities.into_iter());
         /*
         log(format!(

@@ -13,5 +13,4 @@ export interface IPlayerOnchainEntity extends IPlayerGameEntity {
   uuid: string;
   address: string;
   cbox: number;
-  tokensCollected: number;
 }

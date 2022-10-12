@@ -1,7 +1,6 @@
 import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IEventFilter, INodeStatus, IReadData } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./PlayerEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
-import { IState } from "./WasmDappGame";
 
 export const registerPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {
     const callTxIds = await web3Client.smartContracts().callSmartContract({
@@ -102,7 +101,21 @@ export const getPlayerBalance = async (web3Client: Client, gameAddress: string, 
         parameter: playerAddress,
         callerAddress: playerAddress
     } as IReadData);
+    console.log("BALANCE ", readTxData[0]);
     return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+export const getPlayerTokens = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getPlayerTokens",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+  return parseInt(readTxData[0].output_events[0].data, 10);
 }
 
 export const getCollectiblesState = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<ITokenOnchainEntity>> => {

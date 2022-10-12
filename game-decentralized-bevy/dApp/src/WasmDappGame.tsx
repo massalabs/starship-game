@@ -6,15 +6,32 @@ import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, INodeStatus, 
 import TextField from '@mui/material/TextField';
 import * as game from "starship";
 import Box from '@mui/material/Box';
+import Modal from '@mui/material/Modal';
+import Button from '@mui/material/Button';
 import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain, getCollectiblesState } from "./gameFunctions";
+import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain, getCollectiblesState, getPlayerBalance, getPlayerTokens } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { generateThreadAddressesMap } from "./utils";
 import { GameEntityUpdate } from "./GameEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
+
+const style = {
+  position: 'absolute' as 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  height: 500,
+  bgcolor: 'background.paper',
+  border: '2px solid #000',
+  boxShadow: 24,
+  pt: 2,
+  px: 4,
+  pb: 3,
+};
+
 
 const wait = async (timeMilli: number): Promise<void> => {
 	return new Promise<void>((resolve, reject) => {
@@ -53,7 +70,7 @@ const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
 // addresses consts
-const GAME_ADDRESS = "A1HQURdHKQyCDaun6dQ7eQw8LPt1vHo8xBQZMqGsp1EF9d7HAtV"; //process.env.REACT_APP_SC_ADDRESS ||
+const GAME_ADDRESS = "A1Z1hSo3CFFXFSi7tf4WDHMywqKBvqwqpPbzLYDPN4JZ9D58tNo"; //process.env.REACT_APP_SC_ADDRESS ||
 const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
 const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
 
@@ -64,12 +81,16 @@ export interface IState {
   wasm: game.InitOutput | null;
   isLoading: boolean,
   playerAddress: string;
+  playerBalance: number;
+  playerTokens: number;
   playerOnchainState: IPlayerOnchainEntity | null | undefined;
   playerGameState: IPlayerGameEntity | null | undefined;
   web3Client: Client | null;
   threadAddressesMap: Map<number, IAccount>;
   gameAddress: string;
+  show: boolean;
 }
+
 export default class WasmDappExample extends Component<IProps, IState> {
   private updateBlockchainPositionTimeout: NodeJS.Timeout | null = null;
   private gameEventsPoller: EventPoller | null = null;
@@ -85,13 +106,27 @@ export default class WasmDappExample extends Component<IProps, IState> {
       threadAddressesMap: new Map(),
       playerOnchainState: null,
       playerGameState: null,
+      playerBalance: 0.0,
+      playerTokens: 0,
       playerAddress: PLAYER_ADDRESS,
       gameAddress: GAME_ADDRESS,
+      show: true
     };
 
     this.listenOnGameEvents = this.listenOnGameEvents.bind(this);
     this.updateBlockchainPosition = this.updateBlockchainPosition.bind(this);
+    this.showModal = this.showModal.bind(this);
+    this.hideModal = this.hideModal.bind(this);
   }
+
+
+  showModal = () => {
+    this.setState({ show: true });
+  };
+
+  hideModal = () => {
+    this.setState({ show: false });
+  };
 
   async componentDidMount(): Promise<void> {
 
@@ -141,6 +176,8 @@ export default class WasmDappExample extends Component<IProps, IState> {
 
     // register player if necessary
     let playerEntity: IPlayerOnchainEntity|undefined = undefined;
+    let playerBalance: number = 0;
+    let playerTokens: number = 0;
     if (!hasPlayerRegistered) {
       try {
         playerEntity = await registerPlayer(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
@@ -159,6 +196,16 @@ export default class WasmDappExample extends Component<IProps, IState> {
       } catch (ex) {
         console.error("Error registering player...", ex);
       }
+      try {
+        playerBalance = await getPlayerBalance(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
+      } catch (ex) {
+        console.error("Error getting player balance...", ex);
+      }
+      try {
+        playerTokens = await getPlayerTokens(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
+      } catch (ex) {
+        console.error("Error getting player tokens...", ex);
+      }
     }
 
     // get collectibles initial state and send it to the game engine
@@ -174,7 +221,7 @@ export default class WasmDappExample extends Component<IProps, IState> {
     })
     game.push_game_entity_updates(tokensGameUpdate);
 
-    // TODO: set game state if we have bc coordinates
+    // TODO: get all active players at the time of joining
 
     // update react state
     if (playerEntity) {
@@ -183,6 +230,8 @@ export default class WasmDappExample extends Component<IProps, IState> {
               wasm,
               isLoading: false,
               web3Client,
+              playerBalance,
+              playerTokens,
               threadAddressesMap,
               playerOnchainState: playerEntity,
               playerGameState: {
@@ -246,7 +295,7 @@ export default class WasmDappExample extends Component<IProps, IState> {
           switch (eventName) {
             case PLAYER_MOVED: {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
-
+              //console.log("Player moved ", playerEntity);
               // update game engine state
               const gameEntity = new GameEntityUpdate(PLAYER_MOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
@@ -261,7 +310,6 @@ export default class WasmDappExample extends Component<IProps, IState> {
                         address: playerEntity.address,
                         uuid: playerEntity.uuid,
                         cbox: playerEntity.cbox,
-                        tokensCollected: playerEntity.tokensCollected,
                         x: playerEntity.x,
                         y: playerEntity.y,
                         rot: playerEntity.rot}
@@ -293,6 +341,7 @@ export default class WasmDappExample extends Component<IProps, IState> {
               break;
             }
             case TOKEN_COLLECTED: {
+              console.log("Token collected ");
               break;
             }
             case TOKEN_ADDED: {
@@ -358,6 +407,49 @@ export default class WasmDappExample extends Component<IProps, IState> {
   render(): JSX.Element {
     return (
       <React.Fragment>
+        
+      <Modal
+        hideBackdrop
+        open={this.state.show}
+        onClose={() => {console.log("closed");}}
+        aria-labelledby="child-modal-title"
+        aria-describedby="child-modal-description"
+      >
+        <Box sx={{ ...style, width: 500 }}>
+          <h2 id="child-modal-title">Enter game</h2>
+          <p id="child-modal-description">
+            Please either register a new player or select an registered one
+          </p>
+          <div>
+              <Box
+                component="form"
+                sx={{
+                  '& .MuiTextField-root': { m: 1, width: '25ch' },
+                }}
+                noValidate
+                autoComplete="off"
+                bgcolor="primary.main"
+              >
+                <TextField
+                    id="txt-field-tokens-collected"
+                    label="Game address"
+                    value={"0x0"}
+                    disabled={false}
+                    variant="filled"
+                />
+                <TextField
+                    id="txt-field-tokens-balance"
+                    label="Player address"
+                    value={"0x0"}
+                    disabled={false}
+                    variant="filled"
+                />
+              </Box>
+          </div>
+          <Button onClick={() => { this.setState({ show: false }) }}>Register Player</Button>
+        </Box>
+      </Modal>
+
       <ToastContainer />
       <LoadingOverlay
             active={this.state.isLoading}
@@ -379,14 +471,14 @@ export default class WasmDappExample extends Component<IProps, IState> {
                   <TextField
                       id="txt-field-tokens-collected"
                       label="Tokens Collected"
-                      value={this.state.playerOnchainState ? this.state.playerOnchainState.tokensCollected : "0"}
+                      value={this.state.playerOnchainState ? this.state.playerTokens : "0"}
                       disabled={true}
                       variant="filled"
                   />
                   <TextField
                       id="txt-field-tokens-balance"
                       label="Tokens Balance"
-                      value={this.state.playerOnchainState ? this.state.playerOnchainState.tokensCollected : "0"}
+                      value={this.state.playerOnchainState ? this.state.playerBalance : "0.0"}
                       disabled={true}
                       variant="filled"
                   />
