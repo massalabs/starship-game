@@ -1,57 +1,23 @@
-import React, { Component } from "react";
+import React from "react";
 import './App.css';
 import 'react-toastify/dist/ReactToastify.css';
 import type {} from '@mui/lab/themeAugmentation';
-import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, INodeStatus, IProvider, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR, ProviderType } from "@massalabs/massa-web3";
+import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, INodeStatus, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR } from "@massalabs/massa-web3";
 import TextField from '@mui/material/TextField';
 import * as game from "starship";
 import Box from '@mui/material/Box';
-import Modal from '@mui/material/Modal';
-import Button from '@mui/material/Button';
 import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { getPlayerPos, registerPlayer, isPlayerRegistered, setPlayerPositionOnchain, getCollectiblesState, getPlayerBalance, getPlayerTokens } from "./gameFunctions";
+import { setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
-import { generateThreadAddressesMap } from "./utils";
+import { getProviderUrl } from "./utils";
 import { GameEntityUpdate } from "./GameEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
-
-const style = {
-  position: 'absolute' as 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  height: 500,
-  bgcolor: 'background.paper',
-  border: '2px solid #000',
-  boxShadow: 24,
-  pt: 2,
-  px: 4,
-  pb: 3,
-};
-
-
-const wait = async (timeMilli: number): Promise<void> => {
-	return new Promise<void>((resolve, reject) => {
-		const timeout = setTimeout(() => {
-			clearTimeout(timeout);
-			return resolve();
-		}, timeMilli);
-	});
-};
-
-const providers = [
-  {
-      url: "https://inno.massa.net/test13",
-      type: ProviderType.PUBLIC
-  } as IProvider,
-  {
-      url: "https://inno.massa.net/test13",
-      type: ProviderType.PRIVATE
-  } as IProvider
-];
+import {IPropState} from "./RegisterPlayer";
+import { Link } from "react-router-dom";
+import withRouter from "./withRouter";
 
 // game player events
 const PLAYER_MOVED = "PLAYER_MOVED";
@@ -69,175 +35,107 @@ const GAME_EVENTS_POLLING_INTERVAL = 100; // 500 ms = 0.5 sec.
 const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px
 
-// addresses consts
-const GAME_ADDRESS = "A1Z1hSo3CFFXFSi7tf4WDHMywqKBvqwqpPbzLYDPN4JZ9D58tNo"; //process.env.REACT_APP_SC_ADDRESS ||
-const BASE_ACCOUNT_SECRET_KEY = "S1LoQ2cyq273f2TTi1qMYH6qgntAtpn85PbMd9qr2tS7S6A64cC";
-const PLAYER_ADDRESS = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT"; // TODO: to be read in the UI
-
 interface IProps {}
-
 export interface IState {
   wasmError: Error | null;
   wasm: game.InitOutput | null;
   isLoading: boolean,
+  isPlayerRegistered: boolean;
+  networkName: string;
+  playerSecretKey: string;
   playerAddress: string;
   playerBalance: number;
   playerTokens: number;
   playerOnchainState: IPlayerOnchainEntity | null | undefined;
   playerGameState: IPlayerGameEntity | null | undefined;
   web3Client: Client | null;
-  threadAddressesMap: Map<number, IAccount>;
+  threadAddressesMap: Map<string, IAccount>;
   gameAddress: string;
-  show: boolean;
+  tokensInitialState: Array<ITokenOnchainEntity>;
 }
 
-export default class WasmDappExample extends Component<IProps, IState> {
+class WasmDappExample extends React.Component<IProps, IState> {
   private updateBlockchainPositionTimeout: NodeJS.Timeout | null = null;
   private gameEventsPoller: EventPoller | null = null;
 
   constructor(props: IProps) {
     super(props);
 
+    const propState = ((this.props as any).location).state as IPropState;
+
     this.state = {
       wasmError: null,
       wasm: null,
       isLoading: true,
       web3Client: null,
-      threadAddressesMap: new Map(),
-      playerOnchainState: null,
+      networkName: propState.networkName,
+      threadAddressesMap: new Map<string, IAccount>(Object.entries(propState.threadAddressesMap)),
+      isPlayerRegistered: propState.isPlayerRegistered,
+      playerOnchainState: propState.playerOnchainState,
       playerGameState: null,
-      playerBalance: 0.0,
-      playerTokens: 0,
-      playerAddress: PLAYER_ADDRESS,
-      gameAddress: GAME_ADDRESS,
-      show: true
+      playerBalance: propState.playerBalance,
+      playerTokens: propState.playerTokens,
+      playerAddress: propState.playerAddress,
+      playerSecretKey: propState.playerSecretKey,
+      gameAddress: propState.gameAddress,
+      tokensInitialState: propState.tokensInitialState,
     };
 
     this.listenOnGameEvents = this.listenOnGameEvents.bind(this);
     this.updateBlockchainPosition = this.updateBlockchainPosition.bind(this);
-    this.showModal = this.showModal.bind(this);
-    this.hideModal = this.hideModal.bind(this);
   }
-
-
-  showModal = () => {
-    this.setState({ show: true });
-  };
-
-  hideModal = () => {
-    this.setState({ show: false });
-  };
 
   async componentDidMount(): Promise<void> {
 
-    // create a new base account
-    let web3Client: Client|null = null;
-    try {
-      const baseAccount = await WalletClient.getAccountFromSecretKey(BASE_ACCOUNT_SECRET_KEY);
-      web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
-    } catch (ex) {
-      console.error(`Error loading web3 client`, ex);
-    }
-    console.log("Web3 loaded!");
+    const propState = ((this.props as any).location).state;
+    console.log(propState);
+    if (propState && propState.isPlayerRegistered) {
 
-    // generate thread addresses map // TODO: only generate once for new players and update sc
-    let threadAddressesMap: Map<number, IAccount> = new Map();
-    try {
-      threadAddressesMap = await generateThreadAddressesMap(web3Client as Client);
-    } catch (ex) {
-      console.error(`Error generating thread addresses map`, ex);
-    }
-    console.log("Thread map generated!");
-
-    // load wasm
-    let wasm: game.InitOutput|null = null;
-    let isError = false;
-    try {
-      wasm = await game.default();
-    } catch (ex) {
-      console.error(`Error loading wasm`, (ex as Error).message);
-      if (!(ex as Error).message.includes("This isn't actually an error!")) {
-        isError = true;
-      }
-    }
-    if (!isError) {
-      toast(`Wasm Loaded!`,{
-        className: "toast"
-      });
-    }
-
-    // check if player is registered
-    let hasPlayerRegistered: boolean = false;
-    try {
-      hasPlayerRegistered = await isPlayerRegistered(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-    } catch (ex) {
-      console.error("Error getting is player registered...", ex);
-    }
-
-    // register player if necessary
-    let playerEntity: IPlayerOnchainEntity|undefined = undefined;
-    let playerBalance: number = 0;
-    let playerTokens: number = 0;
-    if (!hasPlayerRegistered) {
+      // create a new base account
+      let web3Client: Client|null = null;
       try {
-        playerEntity = await registerPlayer(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-        toast(`Player Just Registered!`,{
+        const baseAccount = await WalletClient.getAccountFromSecretKey(this.state.playerSecretKey);
+        web3Client = await ClientFactory.createCustomClient(getProviderUrl(this.state.networkName), true, baseAccount);
+      } catch (ex) {
+        console.error(`Error loading web3 client`, ex);
+      }
+      console.log("Web3 loaded!");
+
+      // load wasm
+      let wasm: game.InitOutput|null = null;
+      let isError = false;
+      try {
+        wasm = await game.default();
+      } catch (ex) {
+        console.error(`Error loading wasm`, (ex as Error).message);
+        if (!(ex as Error).message.includes("This isn't actually an error!")) {
+          isError = true;
+        }
+      }
+      if (!isError) {
+        toast(`Wasm Loaded!`,{
           className: "toast"
         });
-      } catch (ex) {
-        console.error("Error registering player...", ex);
       }
-    } else {
-      try {
-        playerEntity = await getPlayerPos(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-        toast(`Player Already Registered!`,{
-          className: "toast"
-        });
-      } catch (ex) {
-        console.error("Error registering player...", ex);
-      }
-      try {
-        playerBalance = await getPlayerBalance(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-      } catch (ex) {
-        console.error("Error getting player balance...", ex);
-      }
-      try {
-        playerTokens = await getPlayerTokens(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-      } catch (ex) {
-        console.error("Error getting player tokens...", ex);
-      }
-    }
 
-    // get collectibles initial state and send it to the game engine
-    let tokensInitialState: Array<ITokenOnchainEntity> = [];
-    try {
-      tokensInitialState = await getCollectiblesState(web3Client as Client, GAME_ADDRESS, PLAYER_ADDRESS);
-    } catch (ex) {
-      console.error("Error getting tokens initial state...", ex);
-    }
-    const tokensGameUpdate = tokensInitialState.map(tokenEntity => {
-      const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
-      return gameEntity;
-    })
-    game.push_game_entity_updates(tokensGameUpdate);
+      const tokensGameUpdate = this.state.tokensInitialState.map(tokenEntity => {
+        const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+        return gameEntity;
+      })
+      game.push_game_entity_updates(tokensGameUpdate);
 
-    // TODO: get all active players at the time of joining
+      // TODO: get all active players at the time of joining
 
-    // update react state
-    if (playerEntity) {
+      // update react state
       this.setState((prevState: IState, _prevProps: IProps) => {
         return { ...prevState,
               wasm,
               isLoading: false,
               web3Client,
-              playerBalance,
-              playerTokens,
-              threadAddressesMap,
-              playerOnchainState: playerEntity,
               playerGameState: {
-                x: playerEntity?.x,
-                y: playerEntity?.y,
-                rot: playerEntity?.rot
+                x: this.state.playerOnchainState?.x,
+                y: this.state.playerOnchainState?.y,
+                rot: this.state.playerOnchainState?.rot
               } as IPlayerGameEntity
         };
       }, () => {
@@ -405,133 +303,98 @@ export default class WasmDappExample extends Component<IProps, IState> {
   }
 
   render(): JSX.Element {
-    return (
-      <React.Fragment>
-        
-      <Modal
-        hideBackdrop
-        open={this.state.show}
-        onClose={() => {console.log("closed");}}
-        aria-labelledby="child-modal-title"
-        aria-describedby="child-modal-description"
-      >
-        <Box sx={{ ...style, width: 500 }}>
-          <h2 id="child-modal-title">Enter game</h2>
-          <p id="child-modal-description">
-            Please either register a new player or select an registered one
-          </p>
-          <div>
-              <Box
-                component="form"
-                sx={{
-                  '& .MuiTextField-root': { m: 1, width: '25ch' },
-                }}
-                noValidate
-                autoComplete="off"
-                bgcolor="primary.main"
-              >
-                <TextField
-                    id="txt-field-tokens-collected"
-                    label="Game address"
-                    value={"0x0"}
-                    disabled={false}
-                    variant="filled"
-                />
-                <TextField
-                    id="txt-field-tokens-balance"
-                    label="Player address"
-                    value={"0x0"}
-                    disabled={false}
-                    variant="filled"
-                />
-              </Box>
-          </div>
-          <Button onClick={() => { this.setState({ show: false }) }}>Register Player</Button>
-        </Box>
-      </Modal>
 
-      <ToastContainer />
-      <LoadingOverlay
-            active={this.state.isLoading}
-            spinner
-            text='Loading Starship Game...'
-            className="overlay"
-          >
-            <canvas id="game" className="game" width={SCREEN_WIDTH} height={SCREEN_HEIGHT}/>
-            <Box
-                component="form"
-                sx={{
-                  '& .MuiTextField-root': { m: 1, width: '25ch' },
-                }}
-                noValidate
-                autoComplete="off"
-                bgcolor="primary.main"
-              >
-                <div>
-                  <TextField
-                      id="txt-field-tokens-collected"
-                      label="Tokens Collected"
-                      value={this.state.playerOnchainState ? this.state.playerTokens : "0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                  <TextField
-                      id="txt-field-tokens-balance"
-                      label="Tokens Balance"
-                      value={this.state.playerOnchainState ? this.state.playerBalance : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                </div>
-                <div>
-                  <TextField
-                      id="txt-field-game-x"
-                      label="Game X Pos"
-                      value={this.state.playerGameState ? this.state.playerGameState.x : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                  <TextField
-                      id="txt-field-game-y"
-                      label="Game Y Pos"
-                      value={this.state.playerGameState ? this.state.playerGameState.y : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                  <TextField
-                      id="txt-field-game-rot"
-                      label="Game Rot Pos"
-                      value={this.state.playerGameState ? this.state.playerGameState.rot : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                </div>
-                <div>
-                  <TextField
-                      id="txt-field-massa-x"
-                      label="Massa X Pos"
-                      value={this.state.playerOnchainState ? this.state.playerOnchainState.x : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                  <TextField
-                      id="txt-field-massa-y"
-                      label="Massa Y Pos"
-                      value={this.state.playerOnchainState ? this.state.playerOnchainState.y : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                  <TextField
-                      id="txt-field-massa-rot"
-                      label="Massa Rot Pos"
-                      value={this.state.playerOnchainState ? this.state.playerOnchainState.rot : "0.0"}
-                      disabled={true}
-                      variant="filled"
-                  />
-                </div>
-            </Box>
-          </LoadingOverlay>
-      </React.Fragment>
-    );
+    const propState = ((this.props as any).location).state;
+
+    if (propState && propState.isPlayerRegistered) {
+      return (
+        <React.Fragment>
+        <ToastContainer />
+        <LoadingOverlay
+              active={this.state.isLoading}
+              spinner
+              text='Loading Starship Game...'
+              className="overlay"
+            >
+              <canvas id="game" className="game" width={SCREEN_WIDTH} height={SCREEN_HEIGHT}/>
+              <Box
+                  component="form"
+                  sx={{
+                    '& .MuiTextField-root': { m: 1, width: '25ch' },
+                  }}
+                  noValidate
+                  autoComplete="off"
+                  bgcolor="primary.main"
+                >
+                  <div>
+                    <TextField
+                        id="txt-field-tokens-collected"
+                        label="Tokens Collected"
+                        value={this.state.playerOnchainState ? this.state.playerTokens : "0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                    <TextField
+                        id="txt-field-tokens-balance"
+                        label="Tokens Balance"
+                        value={this.state.playerOnchainState ? this.state.playerBalance : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                  </div>
+                  <div>
+                    <TextField
+                        id="txt-field-game-x"
+                        label="Game X Pos"
+                        value={this.state.playerGameState ? this.state.playerGameState.x : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                    <TextField
+                        id="txt-field-game-y"
+                        label="Game Y Pos"
+                        value={this.state.playerGameState ? this.state.playerGameState.y : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                    <TextField
+                        id="txt-field-game-rot"
+                        label="Game Rot Pos"
+                        value={this.state.playerGameState ? this.state.playerGameState.rot : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                  </div>
+                  <div>
+                    <TextField
+                        id="txt-field-massa-x"
+                        label="Massa X Pos"
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.x : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                    <TextField
+                        id="txt-field-massa-y"
+                        label="Massa Y Pos"
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.y : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                    <TextField
+                        id="txt-field-massa-rot"
+                        label="Massa Rot Pos"
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.rot : "0.0"}
+                        disabled={true}
+                        variant="filled"
+                    />
+                  </div>
+              </Box>
+            </LoadingOverlay>
+        </React.Fragment>
+      )
+    } else {
+      return <Link to={`/`}>Oops! Please register player first</Link>
+    }
   }
 }
+export default withRouter(WasmDappExample);

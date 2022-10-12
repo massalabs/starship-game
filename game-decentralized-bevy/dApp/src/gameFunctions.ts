@@ -141,7 +141,7 @@ const formatNumbersToDecimalPrecision = (input: any): string => {
   return JSON.stringify(input);
 }
 
-export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<number, IAccount>, playerUpdate: IPlayerOnchainEntity): Promise<string|undefined> => {
+export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerUpdate: IPlayerOnchainEntity): Promise<string|undefined> => {
     //console.log("UPDATE ", formatNumbersToDecimalPrecision(playerUpdate));
   
     // evaluate thread from which to send
@@ -155,7 +155,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
 
     const threadForNextOp = ((nodeStatusInfo as INodeStatus).next_slot.thread + 2) % (nodeStatusInfo as INodeStatus).config.thread_count;
     //console.log("Next thread to execute op with = ", threadForNextOp);
-    const executor = threadAddressesMap.get(threadForNextOp);
+    const executor = threadAddressesMap.get(threadForNextOp.toString());
     let opIds;
     try {
       opIds = await web3Client?.smartContracts().callSmartContract({
