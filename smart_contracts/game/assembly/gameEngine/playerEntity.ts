@@ -6,6 +6,7 @@ import {JSON} from 'json-as/assembly';
 export class PlayerEntity {
   uuid: string = '';
   address: string = '';
+  name: string = '';
   x: f32 = 0.0;
   y: f32 = 0.0;
   rot: f32 = 0.0;

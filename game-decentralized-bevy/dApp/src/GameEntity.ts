@@ -2,14 +2,16 @@ export class GameEntityUpdate {
     public operation: string;
     public uuid: string;
     public address: string;
+    public name: string;
     public x: number;
     public y: number;
     public rot: number;
   
-    constructor(operation: string, uuid: string, address: string, x: number, y: number, rot: number) {
+    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number) {
       this.operation = operation;
       this.uuid = uuid;
       this.address = address;
+      this.name = name;
       this.x = x;
       this.y = y;
       this.rot = rot;
@@ -34,6 +36,13 @@ export class GameEntityUpdate {
     }
     get get_address() {
         return this.address;
+    }
+    // ------------------------------------
+    set set_name(name: string) {
+        this.name = name;
+    }
+    get get_name() {
+        return this.name;
     }
     // ------------------------------------
     set set_x(x: number) {

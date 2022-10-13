@@ -18,6 +18,7 @@ pub struct WinSize {
 pub struct RemoteGamePlayerState {
     pub uuid: String,
     pub address: String,
+    pub name: String,
     /// linear speed in meters per second
     pub position: Vec3,
     /// rotation speed in radians per second

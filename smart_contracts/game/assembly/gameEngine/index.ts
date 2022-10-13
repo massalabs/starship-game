@@ -21,6 +21,7 @@ import {PlayerEntity} from './playerEntity';
 import {CollectibleEntity} from './collectibleEntity';
 import {CollectedEntity} from './collectedEntity';
 import {GameEvent} from './gameEvent';
+import {RegisterPlayerRequest} from './RegisterPlayerRequest';
 
 // storage keys
 const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
@@ -35,6 +36,7 @@ const SCREEN_WIDTH_KEY = 'screen_width_key';
 const SCREEN_HEIGHT_KEY = 'screen_height_key';
 const MAX_PLAYERS_KEY = 'max_players_key';
 const ACTIVE_PLAYERS_KEY = 'active_players_key';
+const ACTIVE_PLAYERS_ADDRESSES_KEY = 'active_players_addresses_key';
 
 // events
 
@@ -75,12 +77,12 @@ export const playerStates = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_STATES_MAP_KEY
 );
 
-// registered players tokens map
+// registered players tokens map (player address - token info)
 export const playerTokens = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKENS_MAP_KEY
 );
 
-// generated tokens map
+// generated tokens map (token Index - token data)
 export const generatedTokens = new collections.PersistentMap<u16, string>(
     GENERATED_TOKENS_MAP_KEY
 );
@@ -283,13 +285,28 @@ export function getGameOwnerAddress(_args: string): string {
 }
 
 /**
+ * Returns the game owner address
+ * @param {string} _args - ?
+ * @return {string} string The game owner address
+ */
+export function getActivePlayersAddresses(_args: string): string {
+  assert(Storage.has(ACTIVE_PLAYERS_ADDRESSES_KEY), 'No active players addresses');
+  const activePlayersAddresses = Storage.get(ACTIVE_PLAYERS_ADDRESSES_KEY);
+  generateEvent(`${activePlayersAddresses}`);
+  return activePlayersAddresses;
+}
+
+/**
  * Register a new player.
  *
- * @param {string} address - Address of the player.
+ * @param {string} args - Address of the player.
  */
-export function registerPlayer(address: string): void {
+export function registerPlayer(args: string): void {
+  // parse player register request
+  const playerRegisterRequest = RegisterPlayerRequest.parseFromString(args);
+
   // read player address
-  const addr = Address.fromByteString(address);
+  const addr = Address.fromByteString(playerRegisterRequest.address);
 
   // TODO: gameOwner to register player ????
   // TODO: player must also register its thread addresses that he uses to send a message too ?
@@ -311,6 +328,7 @@ export function registerPlayer(address: string): void {
   const playerEntity: PlayerEntity = {
     uuid: _generateUuid(),
     address: addr.toByteString(),
+    name: playerRegisterRequest.name,
     x: 0.0,
     y: 0.0,
     rot: 90.0,
@@ -322,6 +340,16 @@ export function registerPlayer(address: string): void {
   // increase active players count
   const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
   Storage.set(ACTIVE_PLAYERS_KEY, (currentPlayersCount + 1).toString());
+
+  // add player address to the list of active players (separated by comma)
+  let updatedPlayersAddresses = '';
+  if (Storage.has(ACTIVE_PLAYERS_ADDRESSES_KEY)) {
+    const activePlayersAddresses = Storage.get(ACTIVE_PLAYERS_ADDRESSES_KEY);
+    updatedPlayersAddresses = `${activePlayersAddresses},${addr.toByteString()}`;
+  } else {
+    updatedPlayersAddresses = addr.toByteString();
+  }
+  Storage.set(ACTIVE_PLAYERS_ADDRESSES_KEY, updatedPlayersAddresses);
 
   // generate a message
   const eventMessage = _formatGameEvent(PLAYER_ADDED, serializedPlayerData);
@@ -363,6 +391,20 @@ export function removePlayer(address: string): void {
   const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
   const newCount = currentPlayersCount - 1;
   Storage.set(ACTIVE_PLAYERS_KEY, newCount < 0 ? '0'.toString() : newCount.toString());
+
+  // remove player from the list of active players (separated by comma)
+  let updatedPlayersAddresses = '';
+  if (Storage.has(ACTIVE_PLAYERS_ADDRESSES_KEY)) {
+    const activePlayersAddresses = Storage.get(ACTIVE_PLAYERS_ADDRESSES_KEY).split(',');
+    const reducedAddresses: Array<string> = [];
+    for (let i = 0; i < activePlayersAddresses.length; i ++) {
+      if (activePlayersAddresses[i] !== addr.toByteString()) {
+        reducedAddresses.push(activePlayersAddresses[i]);
+      }
+    }
+    updatedPlayersAddresses = `${reducedAddresses.join(',')}`;
+  }
+  Storage.set(ACTIVE_PLAYERS_ADDRESSES_KEY, updatedPlayersAddresses);
 
   // generate a message
   const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.serializeToString());

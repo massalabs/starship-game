@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import LoadingOverlay from 'react-loading-overlay-ts';
 import './App.css';
 import 'react-toastify/dist/ReactToastify.css';
 import type {} from '@mui/lab/themeAugmentation';
@@ -21,7 +22,7 @@ const style = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  height: 500,
+  height: 600,
   bgcolor: 'background.paper',
   border: '2px solid #000',
   boxShadow: 24,
@@ -37,6 +38,7 @@ export interface IPropState {
   gameAddress: string;
   playerSecretKey: string;
   playerAddress: string;
+  playerName: string;
   networkName: string;
   isPlayerRegistered: boolean;
   tokensInitialState: Array<ITokenOnchainEntity>;
@@ -48,6 +50,7 @@ export interface IPropState {
 
 export interface IState extends IPropState {
   showModal: boolean;
+  isRegisteringPlayer: boolean;
 }
 
 export default class RegisterPlayer extends Component<IProps, IState> {
@@ -59,6 +62,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       playerAddress: 'N/A',
       gameAddress: "",
       playerSecretKey: "",
+      playerName: "N/A",
       networkName: networks.IMMONET.value,
       showModal: true,
       isPlayerRegistered: false,
@@ -67,6 +71,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       playerOnchainState: undefined,
       playerBalance: 0,
       playerTokens: 0,
+      isRegisteringPlayer: false,
     };
 
     this.showModal = this.showModal.bind(this);
@@ -87,6 +92,10 @@ export default class RegisterPlayer extends Component<IProps, IState> {
 
   handleGameAddressChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     this.setState({ gameAddress: event.target.value });
+  };
+
+  handlePlayerNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ playerName: event.target.value });
   };
 
   handlePlayerSecretKeyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,6 +120,11 @@ export default class RegisterPlayer extends Component<IProps, IState> {
 
   async registerPlayerAndOpenGame(): Promise<void> {
 
+    this.setState({
+      isRegisteringPlayer: true,
+      showModal: false
+    })
+
     // create a new base account
     let web3Client: Client|undefined = undefined;
     let baseAccount: IAccount|undefined = undefined;
@@ -120,7 +134,10 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     } catch (ex) {
       console.error(`Error loading web3 client`, ex);
     }
-    console.log("Web3 loaded!");
+    toast(`Massa Web3 Loaded!`,{
+      className: "toast",
+      type: "success"
+    });
 
     // generate thread addresses map // TODO: only generate once for new players and update sc
     let threadAddressesMap: Map<number, IAccount> = new Map();
@@ -145,21 +162,33 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     let playerTokens: number = 0;
     if (!hasPlayerRegistered) {
       try {
-        playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+        playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress);
         toast(`Player Just Registered!`,{
-          className: "toast"
+          className: "toast",
+          type: "success"
         });
       } catch (ex) {
         console.error("Error registering player...", ex);
+        this.setState({ isRegisteringPlayer: false });
+        toast(`Error checking for registered player ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
       }
     } else {
       try {
         playerEntity = await getPlayerPos(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
         toast(`Player Already Registered!`,{
-          className: "toast"
+          className: "toast",
+          type: "success"
         });
       } catch (ex) {
         console.error("Error registering player...", ex);
+        this.setState({ isRegisteringPlayer: false });
+        toast(`Error registering player ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
       }
       try {
         playerBalance = await getPlayerBalance(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
@@ -179,6 +208,11 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       tokensInitialState = await getCollectiblesState(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
     } catch (ex) {
       console.error("Error getting tokens initial state...", ex);
+      this.setState({ isRegisteringPlayer: false });
+      toast(`Error getting collectibles state ${(ex as Error).message}!`,{
+        className: "toast",
+        type: "error"
+      });
     }
 
     // TODO: get all active players at the time of joining
@@ -193,7 +227,8 @@ export default class RegisterPlayer extends Component<IProps, IState> {
               playerBalance,
               playerTokens,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
-              playerOnchainState: playerEntity
+              playerOnchainState: playerEntity,
+              isRegisteringPlayer: false
         };
       });
     }
@@ -204,7 +239,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
   }
 
   render(): JSX.Element {
-    if (this.state.showModal) {
+    if (this.state.showModal && !this.state.isRegisteringPlayer) {
       return (
         <React.Fragment>
           <Modal
@@ -214,6 +249,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
             aria-labelledby="child-modal-title"
             aria-describedby="child-modal-description"
           >
+
             <Box sx={{ ...style, width: 700 }}>
               <h2 id="child-modal-title">Enter game</h2>
               <p id="child-modal-description">
@@ -262,6 +298,14 @@ export default class RegisterPlayer extends Component<IProps, IState> {
                           disabled={false}
                           variant="filled"
                       />
+                      <TextField
+                          id="txt-field-tokens-balance"
+                          label="Player name"
+                          value={this.state.playerName}
+                          onChange={this.handlePlayerNameChange}
+                          disabled={false}
+                          variant="filled"
+                      />
                     </div>
                     <div>
                       <TextField
@@ -271,16 +315,25 @@ export default class RegisterPlayer extends Component<IProps, IState> {
                           disabled={true}
                           variant="filled"
                       />
-                      </div>
+                    </div>
                   </Box>
               </div>
               <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>Register Player</Button>
             </Box>
+
           </Modal>
-  
           <ToastContainer />
-        
         </React.Fragment>
+      )
+    } else if (!this.state.showModal && this.state.isRegisteringPlayer) {
+      return (
+        <LoadingOverlay
+          active={this.state.isRegisteringPlayer}
+          spinner
+          text='Registering player...'
+          className="overlay"
+        >
+        </LoadingOverlay>
       )
     } else {
       return <Navigate to="/play" replace state={this.state as IPropState} />;

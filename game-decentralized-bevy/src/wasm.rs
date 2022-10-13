@@ -75,6 +75,7 @@ extern "C" {
         operation: String,
         uuid: String,
         address: String,
+        name: String,
         x: f32,
         y: f32,
         rot: f32,
@@ -109,6 +110,16 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, js_name = get_address)]
     fn get_address(this: &GameEntityUpdate) -> Option<String>;
+
+    // ----------NAME------------- //
+    #[wasm_bindgen(method, setter, js_name = set_name)]
+    fn set_name(
+        this: &GameEntityUpdate,
+        value: String,
+    );
+
+    #[wasm_bindgen(method, getter, js_name = get_name)]
+    fn get_name(this: &GameEntityUpdate) -> Option<String>;
 
     // -----------X------------ //
     #[wasm_bindgen(method, setter, js_name = set_x)]

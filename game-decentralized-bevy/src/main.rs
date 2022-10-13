@@ -3,10 +3,9 @@ use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use components::{
-    Blockchainable, Collectible, Identifyable, LocalPlayer, Movable, RemotePlayer, SpriteSize,
+    Blockchainable, Collectible, Identifyable, Movable, RemotePlayer, SpriteSize,
     Velocity, RequiresKinematicUpdate,
 };
-use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use player::PlayerPlugin;
 use resources::{GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType, WinSize};
@@ -130,15 +129,17 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
     let operation = get_value_for_key("operation", &js_obj).expect("Some operation to be present");
     let uuid = get_value_for_key("uuid", &js_obj).expect("Some uuid to be present");
     let address = get_value_for_key("address", &js_obj).expect("Some address to be present");
+    let name = get_value_for_key("name", &js_obj).expect("Some name to be present");
     let x = get_value_for_key("x", &js_obj).expect("Some x to be present");
     let y = get_value_for_key("y", &js_obj).expect("Some y to be present");
     let rot = get_value_for_key("rot", &js_obj).expect("Some rot to be present");
 
     let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) {
-        //info!("PLAYER_ADDED");
+        info!("PLAYER_ADDED");
         Some(RemoteStateType::PlayerAdded(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
+            name: name.as_string().unwrap(),
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
@@ -147,10 +148,11 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_MOVED)) {
-        //info!("PLAYER_MOVED");
+        info!("PLAYER_MOVED");
         Some(RemoteStateType::PlayerMoved(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
+            name: name.as_string().unwrap(),
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
@@ -163,6 +165,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
         Some(RemoteStateType::PlayerRemoved(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
+            name: name.as_string().unwrap(),
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
@@ -318,7 +321,6 @@ fn only_entities_with_kinematic_update(
     mut query: Query<(Entity, &mut Transform, &RequiresKinematicUpdate), (With<RequiresKinematicUpdate>, With<RemotePlayer>)>,
 ) {
     for (entity, mut transform, kinematic_update) in query.iter_mut() {
-        info!("MOVING REMOTE ENTITYYYYYYY {:?}", entity);
         if let Some(player_updated_state) = game_state.remote_players.get(&kinematic_update.0) {
             transform.translation = player_updated_state.position;
             transform.rotation = player_updated_state.rotation;

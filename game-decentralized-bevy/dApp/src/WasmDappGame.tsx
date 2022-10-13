@@ -10,7 +10,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { getActivePlayersCount, getMaximumPlayersCount, setPlayerPositionOnchain } from "./gameFunctions";
+import { getActivePlayersAddresses, getActivePlayersCount, getMaximumPlayersCount, getPlayerPos, setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { getProviderUrl } from "./utils";
 import { GameEntityUpdate } from "./GameEntity";
@@ -92,7 +92,6 @@ class WasmDappExample extends React.Component<IProps, IState> {
   async componentDidMount(): Promise<void> {
 
     const propState = ((this.props as any).location).state;
-    console.log(propState);
     if (propState && propState.isPlayerRegistered) {
 
       // create a new base account
@@ -122,12 +121,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
         });
       }
 
+      // render in game client initial tokens state
       const tokensGameUpdate = this.state.tokensInitialState.map(tokenEntity => {
-        const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+        const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0);
         return gameEntity;
       })
       game.push_game_entity_updates(tokensGameUpdate);
 
+      // get connected players
       let maxPlayers: number = 0;
       let activePlayers: number = 0;
       try {
@@ -136,6 +137,30 @@ class WasmDappExample extends React.Component<IProps, IState> {
       } catch (ex) {
         console.error("Error getting players count data...", ex);
       }
+
+      // get connected players addresses
+      let connectedPlayers: Array<string> = [];
+      try {
+        connectedPlayers = await getActivePlayersAddresses(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting connected players data...", ex);
+      }
+      const remotePlayersOnly = connectedPlayers.filter((addr) => addr !== propState.playerAddress);
+
+      const statePromises: Promise<IPlayerOnchainEntity>[] = remotePlayersOnly.map((addr) => {
+        return getPlayerPos(web3Client as Client, this.state.gameAddress, addr)
+      });
+      let remotePlayersStates: Array<IPlayerOnchainEntity> = [];
+      try {
+        remotePlayersStates = await Promise.all(statePromises);
+      } catch (ex) {
+        console.error("Error getting remote player states...", ex);
+      }
+      const remotePlayersStatesUpdate = remotePlayersStates.map(remotePlayerState => {
+        const gameEntity = new GameEntityUpdate(PLAYER_ADDED, remotePlayerState.uuid, remotePlayerState.address, remotePlayerState.name, remotePlayerState.x, remotePlayerState.y, remotePlayerState.rot);
+        return gameEntity;
+      })
+      game.push_game_entity_updates(remotePlayersStatesUpdate);
 
       // update react state
       this.setState((prevState: IState, _prevProps: IProps) => {
@@ -208,17 +233,19 @@ class WasmDappExample extends React.Component<IProps, IState> {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               //console.log("Player moved ", playerEntity);
               // update game engine state
-              const gameEntity = new GameEntityUpdate(PLAYER_MOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              const gameEntity = new GameEntityUpdate(PLAYER_MOVED, playerEntity.uuid, playerEntity.address, playerEntity.name, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
 
               // in case of the update concerning local player update local player's reported bc coordinates
               const playerOnchainState = this.state.playerOnchainState as IPlayerOnchainEntity;
               if ((playerEntity as IPlayerOnchainEntity).address === playerOnchainState.address && 
-              (playerEntity as IPlayerOnchainEntity).uuid === playerOnchainState.uuid) {
+              (playerEntity as IPlayerOnchainEntity).uuid === playerOnchainState.uuid &&
+              (playerEntity as IPlayerOnchainEntity).name === playerOnchainState.name) {
                   this.setState((prevState: IState, _prevProps: IProps) => {
                     return {...prevState,
                       playerOnchainState: {
                         address: playerEntity.address,
+                        name: playerEntity.name,
                         uuid: playerEntity.uuid,
                         cbox: playerEntity.cbox,
                         x: playerEntity.x,
@@ -233,12 +260,12 @@ class WasmDappExample extends React.Component<IProps, IState> {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player added ", playerEntity);
               // update game engine state
-              const gameEntity = new GameEntityUpdate(PLAYER_ADDED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              const gameEntity = new GameEntityUpdate(PLAYER_ADDED, playerEntity.uuid, playerEntity.address, playerEntity.name, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
               this.setState({
                 activePlayers: this.state.activePlayers + 1
               });
-              toast(`Player ${playerEntity.uuid} just joined!`,{
+              toast(`Player ${playerEntity.name} just joined!`,{
                 className: "toast"
               });
               break;
@@ -247,9 +274,9 @@ class WasmDappExample extends React.Component<IProps, IState> {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player removed ", playerEntity);
               // update game engine state
-              const gameEntity = new GameEntityUpdate(PLAYER_REMOVED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
+              const gameEntity = new GameEntityUpdate(PLAYER_REMOVED, playerEntity.uuid, playerEntity.address, playerEntity.name, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
-              toast(`Player ${playerEntity.uuid} disconnected!`,{
+              toast(`Player ${playerEntity.name} disconnected!`,{
                 className: "toast"
               });
               this.setState({
@@ -263,13 +290,13 @@ class WasmDappExample extends React.Component<IProps, IState> {
             }
             case TOKEN_ADDED: {
               const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
-              const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+              const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0);
               game.push_game_entity_updates([gameEntity]);
               break;
             }
             case TOKEN_REMOVED: {
               const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
-              const gameEntity = new GameEntityUpdate(TOKEN_REMOVED, tokenEntity.uuid, "N/A", tokenEntity.x, tokenEntity.y, 0.0);
+              const gameEntity = new GameEntityUpdate(TOKEN_REMOVED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0);
               game.push_game_entity_updates([gameEntity]);
               break;
             }
@@ -329,6 +356,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
       return (
         <React.Fragment>
         <ToastContainer />
+        <p>Welcome, {propState.playerName}!</p>
         <LoadingOverlay
               active={this.state.isLoading}
               spinner

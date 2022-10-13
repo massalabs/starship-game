@@ -2,7 +2,7 @@ import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IEventFilte
 import { IPlayerOnchainEntity } from "./PlayerEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
 
-export const registerPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {
+export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {
     const callTxIds = await web3Client.smartContracts().callSmartContract({
       fee: 0,
       gasPrice: 0,
@@ -11,7 +11,7 @@ export const registerPlayer = async (web3Client: Client, gameAddress: string, pl
       sequentialCoins: 0,
       targetAddress: gameAddress,
       functionName: "registerPlayer",
-      parameter: playerAddress,
+      parameter: `{"name":"${playerName}","address":"${playerAddress}"}`,
     } as ICallData);
     const callScOperationId = callTxIds[0];
   
@@ -74,7 +74,6 @@ export const getPlayerPos = async (web3Client: Client, gameAddress: string, play
     return playerEntity as IPlayerOnchainEntity;
 }
 
-
 export const isPlayerRegistered = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<boolean> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({
         fee: 0,
@@ -102,6 +101,23 @@ export const getActivePlayersCount = async (web3Client: Client, gameAddress: str
       callerAddress: playerAddress
   } as IReadData);
   return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+export const getActivePlayersAddresses = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getActivePlayersAddresses",
+      parameter: '',
+      callerAddress: playerAddress
+  } as IReadData);
+  let addresses: Array<string> = [];
+  if (readTxData[0].output_events[0].data) {
+    addresses = readTxData[0].output_events[0].data.split(",");
+  }
+  return addresses;
 }
 
 export const getMaximumPlayersCount = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
