@@ -33,6 +33,8 @@ const TOKEN_ADDRESS_KEY = 'token_address_key';
 const GENERATED_TOKENS_COUNT_KEY = 'state_key';
 const SCREEN_WIDTH_KEY = 'screen_width_key';
 const SCREEN_HEIGHT_KEY = 'screen_height_key';
+const MAX_PLAYERS_KEY = 'max_players_key';
+const ACTIVE_PLAYERS_KEY = 'active_players_key';
 
 // events
 
@@ -130,6 +132,22 @@ function _assertGameOwner(caller: Address): bool {
 }
 
 /**
+ * Returns if the an Address is a game owner or not. Returns true if no game ower is yet set
+ * @return {bool}
+ */
+function _checkMaxPlayersLimit(): bool {
+  if (!Storage.has(MAX_PLAYERS_KEY)) {
+    return true; // no need to check max players count
+  }
+  const maxPlayersCount = parseInt(Storage.get(MAX_PLAYERS_KEY), 10);
+  const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
+  if (currentPlayersCount + 1 > maxPlayersCount) {
+    return false; // violated
+  }
+  return true; // ok - not violated
+}
+
+/**
  * Returns if the Player Address has been registered or not.
  * @param {string} address - Address of the player.
  * @return {string} the stringified boolean
@@ -161,6 +179,18 @@ export function getRegisteredPlayerUuid(address: string): string {
   // return the entity uuid
   generateEvent(`${playerEntity.uuid}`);
   return playerEntity.uuid;
+}
+
+/**
+ * Returns if the Player Address has been registered or not.
+ * @param {string} _args - Address of the player.
+ * @return {string} the player uuid
+ */
+export function getActivePlayersCount(_args: string): string {
+  const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
+  // return the entity uuid
+  generateEvent(`${currentPlayersCount}.toString()`);
+  return currentPlayersCount.toString();
 }
 
 /**
@@ -257,6 +287,11 @@ export function registerPlayer(address: string): void {
     return;
   }
 
+  // check max player count is not exceeded
+  if (!_checkMaxPlayersLimit()) {
+    return;
+  }
+
   // mark player as registered
   registeredPlayers.set(addr.toByteString(), true);
 
@@ -272,6 +307,11 @@ export function registerPlayer(address: string): void {
   const serializedPlayerData: string = playerEntity.serializeToString();
   playerStates.set(addr.toByteString(), serializedPlayerData);
 
+  // increase active players count
+  const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
+  Storage.set(ACTIVE_PLAYERS_KEY, (currentPlayersCount + 1).toString());
+
+  // generate a message
   const eventMessage = _formatGameEvent(PLAYER_ADDED, serializedPlayerData);
 
   // send event from caller
@@ -307,6 +347,12 @@ export function removePlayer(address: string): void {
     playerTokens.delete(addr.toByteString());
   }
 
+  // decrease active players count
+  const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
+  const newCount = currentPlayersCount - 1;
+  Storage.set(ACTIVE_PLAYERS_KEY, newCount < 0 ? '0'.toString() : newCount.toString());
+
+  // generate a message
   const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.serializeToString());
 
   // send event from caller
@@ -596,6 +642,28 @@ export function initGeneratedGameTokens(_args: string): void {
     generatedTokens.set(tokenIndex, randomCollectibleEntity.serializeToString());
   }
   Storage.set(GENERATED_TOKENS_COUNT_KEY, TOTAL_ONSCREEN_TOKENS.toString());
+}
+
+/**
+ * Stop creating collectibles.
+ *
+ * @param {string} _args - ?.
+ */
+export function setMaxPlayers(_args: string): void {
+  // check that the caller is the game owner
+  assert(_assertGameOwner(Context.caller()));
+
+  const maxPlayersCount = parseInt(_args, 10);
+
+  // init players count
+  if (!Storage.has(MAX_PLAYERS_KEY)) {
+    Storage.set(MAX_PLAYERS_KEY, maxPlayersCount.toString());
+  }
+
+  // init active players count too
+  if (!Storage.has(MAX_PLAYERS_KEY)) {
+    Storage.set(MAX_PLAYERS_KEY, '0'.toString());
+  }
 }
 
 /**
