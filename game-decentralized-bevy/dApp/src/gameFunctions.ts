@@ -91,6 +91,32 @@ export const isPlayerRegistered = async (web3Client: Client, gameAddress: string
     return isRegistered;
 }
 
+export const getActivePlayersCount = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getActivePlayersCount",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+  return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+export const getMaximumPlayersCount = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getMaximumPlayersCount",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+  return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
 export const getPlayerBalance = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({
         fee: 0,
@@ -101,7 +127,6 @@ export const getPlayerBalance = async (web3Client: Client, gameAddress: string, 
         parameter: playerAddress,
         callerAddress: playerAddress
     } as IReadData);
-    console.log("BALANCE ", readTxData[0]);
     return parseInt(readTxData[0].output_events[0].data, 10);
 }
 

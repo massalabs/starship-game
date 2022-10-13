@@ -194,6 +194,18 @@ export function getActivePlayersCount(_args: string): string {
 }
 
 /**
+ * Returns if the Player Address has been registered or not.
+ * @param {string} _args - Address of the player.
+ * @return {string} the player uuid
+ */
+export function getMaximumPlayersCount(_args: string): string {
+  const maximumPlayersCount = parseInt(Storage.get(MAX_PLAYERS_KEY), 10);
+  // return the entity uuid
+  generateEvent(`${maximumPlayersCount}.toString()`);
+  return maximumPlayersCount.toString();
+}
+
+/**
  * Sets the screen width
  * @param {string} screenWidth - Screen width to set.
  */
@@ -661,8 +673,8 @@ export function setMaxPlayers(_args: string): void {
   }
 
   // init active players count too
-  if (!Storage.has(MAX_PLAYERS_KEY)) {
-    Storage.set(MAX_PLAYERS_KEY, '0'.toString());
+  if (!Storage.has(ACTIVE_PLAYERS_KEY)) {
+    Storage.set(ACTIVE_PLAYERS_KEY, '0'.toString());
   }
 }
 

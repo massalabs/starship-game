@@ -10,7 +10,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { setPlayerPositionOnchain } from "./gameFunctions";
+import { getActivePlayersCount, getMaximumPlayersCount, setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { getProviderUrl } from "./utils";
 import { GameEntityUpdate } from "./GameEntity";
@@ -52,6 +52,8 @@ export interface IState {
   threadAddressesMap: Map<string, IAccount>;
   gameAddress: string;
   tokensInitialState: Array<ITokenOnchainEntity>;
+  activePlayers: number;
+  maxPlayers: number;
 }
 
 class WasmDappExample extends React.Component<IProps, IState> {
@@ -79,6 +81,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
       playerSecretKey: propState.playerSecretKey,
       gameAddress: propState.gameAddress,
       tokensInitialState: propState.tokensInitialState,
+      activePlayers: 0,
+      maxPlayers: 0,
     };
 
     this.listenOnGameEvents = this.listenOnGameEvents.bind(this);
@@ -124,7 +128,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
       })
       game.push_game_entity_updates(tokensGameUpdate);
 
-      // TODO: get all active players at the time of joining
+      let maxPlayers: number = 0;
+      let activePlayers: number = 0;
+      try {
+        activePlayers = await getActivePlayersCount(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+        maxPlayers = await getMaximumPlayersCount(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting players count data...", ex);
+      }
 
       // update react state
       this.setState((prevState: IState, _prevProps: IProps) => {
@@ -132,6 +143,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
               wasm,
               isLoading: false,
               web3Client,
+              activePlayers,
+              maxPlayers,
               playerGameState: {
                 x: this.state.playerOnchainState?.x,
                 y: this.state.playerOnchainState?.y,
@@ -139,7 +152,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
               } as IPlayerGameEntity
         };
       }, () => {
-      // start interval loops
+        // start interval loops
         this.listenOnGameEvents();
         this.updateBlockchainPosition();
         toast(`Ready GO!`,{
@@ -222,6 +235,9 @@ class WasmDappExample extends React.Component<IProps, IState> {
               // update game engine state
               const gameEntity = new GameEntityUpdate(PLAYER_ADDED, playerEntity.uuid, playerEntity.address, playerEntity.x, playerEntity.y, playerEntity.rot);
               game.push_game_entity_updates([gameEntity]);
+              this.setState({
+                activePlayers: this.state.activePlayers + 1
+              });
               toast(`Player ${playerEntity.uuid} just joined!`,{
                 className: "toast"
               });
@@ -235,6 +251,9 @@ class WasmDappExample extends React.Component<IProps, IState> {
               game.push_game_entity_updates([gameEntity]);
               toast(`Player ${playerEntity.uuid} disconnected!`,{
                 className: "toast"
+              });
+              this.setState({
+                activePlayers: Math.max(this.state.activePlayers - 1, 0)
               });
               break;
             }
@@ -326,6 +345,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
                   autoComplete="off"
                   bgcolor="primary.main"
                 >
+                  <div>
+                    <TextField
+                        id="txt-field-tokens-collected"
+                        label="Active players"
+                        value={`${this.state.activePlayers}/${this.state.maxPlayers}`}
+                        disabled={true}
+                        variant="filled"
+                    />
+                  </div>
                   <div>
                     <TextField
                         id="txt-field-tokens-collected"
