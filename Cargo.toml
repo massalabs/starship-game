@@ -2,34 +2,8 @@
 resolver = "2"
 
 members = [
-    "game-centralized",
-    "game-decentralized",
-    "server",
-    "shared"
+    "shared",
+    "game-decentralized-macroquad"
 ]
 
-# From https://doc.rust-lang.org/cargo/reference/profiles.html#overrides
-[profile.dev.package."*"]
-opt-level = 3 # Speed-up the CI
-
-[profile.dev]
-codegen-units = 1
-# Tell `rustc` to optimize for small code size.
-opt-level = 3
-lto = true
-strip = true
-# strip = false
-panic = "abort"
-# Opt into extra safety checks on arithmetic operations https://stackoverflow.com/a/64136471/249801
-overflow-checks = true
-
-[profile.release]
-codegen-units = 1
-# Tell `rustc` to optimize for small code size.
-opt-level = 3
-lto = true
-strip = true
-# strip = false
-panic = "abort"
-# Opt into extra safety checks on arithmetic operations https://stackoverflow.com/a/64136471/249801
-overflow-checks = true
+exclude = ["game-decentralized-macroquad", "game-decentralized-bevy"]

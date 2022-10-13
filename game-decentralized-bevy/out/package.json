@@ -1,0 +1,13 @@
+{
+    "name": "starship",
+    "version": "0.1.0",
+    "files": [
+      "starship_bg.wasm",
+      "starship.js",
+      "starship_bg.js",
+      "starship.d.ts"
+    ],
+    "module": "starship.js",
+    "types": "starship.d.ts",
+    "sideEffects": false
+  }

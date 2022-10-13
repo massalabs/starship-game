@@ -8,7 +8,7 @@ export class CollectibleEntity {
   x: f32 = 0.0;
   y: f32 = 0.0;
   cbox: f32 = 0.0;
-  value: u64 = 0;
+  value: f32 = 0.0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<CollectibleEntity>(this);

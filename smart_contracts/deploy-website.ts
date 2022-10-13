@@ -1,4 +1,4 @@
-import { IAccount, ICallData, WalletClient } from "@massalabs/massa-web3";
+import { IAccount, WalletClient } from "@massalabs/massa-web3";
 import { IContractData } from "@massalabs/massa-web3";
 import { IEventFilter } from "@massalabs/massa-web3";
 import { ClientFactory, DefaultProviderUrls } from "@massalabs/massa-web3";
@@ -7,14 +7,14 @@ import { IEvent } from "@massalabs/massa-web3";
 import { EventPoller } from "@massalabs/massa-web3";
 import { EOperationStatus } from "@massalabs/massa-web3";
 import { PathLike } from "fs";
+import { zip, COMPRESSION_LEVEL } from "zip-a-folder";
+import { ICompiledSmartContract } from "@massalabs/massa-sc-utils/dist/interfaces/ICompiledSmartContract";
 const path = require("path");
 const fs = require("fs");
 const prompt = require("prompt");
 const chalk = require("chalk");
 const ora = require("ora");
 const exec = require("child_process").exec;
-import { zip, COMPRESSION_LEVEL } from "zip-a-folder";
-import { ICompiledSmartContract } from "@massalabs/massa-sc-utils/dist/interfaces/ICompiledSmartContract";
 
 const DAPP_FOLDER: PathLike = "../dApp";
 const DAPP_ENV_FILE: PathLike = ".env";

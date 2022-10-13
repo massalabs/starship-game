@@ -6,10 +6,11 @@ import {JSON} from 'json-as/assembly';
 export class PlayerEntity {
   uuid: string = '';
   address: string = '';
+  name: string = '';
   x: f32 = 0.0;
   y: f32 = 0.0;
+  rot: f32 = 0.0;
   cbox: f32 = 0.0;
-  tokensCollected: u64 = 0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<PlayerEntity>(this);

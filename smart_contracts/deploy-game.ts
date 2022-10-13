@@ -1,4 +1,4 @@
-import { IAccount, WalletClient } from "@massalabs/massa-web3";
+import { Client, IAccount, IProvider, ProviderType, WalletClient } from "@massalabs/massa-web3";
 import { IContractData } from "@massalabs/massa-web3";
 import { IEventFilter } from "@massalabs/massa-web3";
 import { ClientFactory, DefaultProviderUrls } from "@massalabs/massa-web3";
@@ -59,9 +59,9 @@ const schema = {
 		networkID: {
 			description: "Network ID",
 			message: "Must be one of MAINNET/TESTNET/LABNET",
-			pattern: "(MAINNET|mainnet|TESTNET|testnet|LABNET|labnet)",
+			pattern: "(MAINNET|mainnet|TESTNET|testnet|LABNET|labnet|IMMONET|immonet)",
 			type: "string",
-			default: "LABNET",
+			default: "IMMONET",
 			required: true
 		},
 		deployerSecretKey: {
@@ -153,28 +153,7 @@ prompt.get(schema, async (err, result) => {
 			}
 		}
 
-		// get input from prompt
-		const networkID: string = result.networkID.toUpperCase();
-		let selectedNetwork: DefaultProviderUrls = DefaultProviderUrls.TESTNET;
-		switch (networkID) {
-			case "TESTNET": {
-				selectedNetwork = DefaultProviderUrls.TESTNET;
-				break;
-			}
-			case "MAINNET": {
-				selectedNetwork = DefaultProviderUrls.MAINNET;
-				break;
-			}
-			case "LABNET": {
-				selectedNetwork = DefaultProviderUrls.LABNET;
-				break;
-			}
-			default: {
-				throw new Error(`Unknown network selected: ${networkID}`);
-			}
-		}
-
-		// init deployer account and a web3 client
+		// get input from prompt and init a web3 client
 		const deployerSecretKey: string = result.deployerSecretKey;
 		let deployerAccount: IAccount;
 		try {
@@ -183,8 +162,48 @@ prompt.get(schema, async (err, result) => {
 			throw new Error(`Wrong private key. Deployer account could not be initialized: ${ex}`);
 		}
 
-		// init a web3 client
-		const web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+		// get input from prompt
+		const networkID: string = result.networkID.toUpperCase();
+		let selectedNetwork: DefaultProviderUrls = DefaultProviderUrls.TESTNET;
+		let web3Client: Client = null;
+		try {
+			switch (networkID) {
+				case "TESTNET": {
+					selectedNetwork = DefaultProviderUrls.TESTNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "MAINNET": {
+					selectedNetwork = DefaultProviderUrls.MAINNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "LABNET": {
+					selectedNetwork = DefaultProviderUrls.LABNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "IMMONET": {
+					const providers = [
+						{
+							url: "https://inno.massa.net/test13",
+							type: ProviderType.PUBLIC
+						} as IProvider,
+						{
+							url: "https://inno.massa.net/test13",
+							type: ProviderType.PRIVATE
+						} as IProvider
+					];
+					web3Client = await ClientFactory.createCustomClient(providers, true, deployerAccount);
+					break;
+				}
+				default: {
+					throw new Error(`Unknown network selected: ${networkID}`);
+				}
+			}
+		} catch (ex) {
+			throw new Error(`Error initializing a web3 client: ${ex}`);
+		}
 
 		const fee: number = result.fee;
 		const maxGas: number = result.maxGas;
@@ -207,7 +226,7 @@ prompt.get(schema, async (err, result) => {
 				maxGas,
 				gasPrice,
 				coins,
-			} as IContractData, selectedNetwork, deployerAccount, true);
+			} as IContractData, web3Client, true, deployerAccount);
 		} catch (ex) {
 			const msg = chalk.red(`Error compiling/deploying smart contract on path ${chalk.yellow(wasmFile)}`);
 			console.error(msg);
@@ -254,7 +273,7 @@ prompt.get(schema, async (err, result) => {
 		// compile template
 		let initScTemplate = Handlebars.compile(templateContents);
 		// render template
-		let renderedTemplate = initScTemplate({ tokenAddress, gameAddress: gameScAddress });
+		let renderedTemplate = initScTemplate({ tokenAddress: tokenAddress, gameAddress: gameScAddress });
 		// write contents to a file
 		fs.writeFileSync(RUNNER_SC, renderedTemplate, { flag: "w+" });
 
@@ -287,7 +306,7 @@ prompt.get(schema, async (err, result) => {
 				maxGas,
 				gasPrice,
 				coins,
-			} as IContractData, selectedNetwork, deployerAccount, true);
+			} as IContractData, web3Client, true, deployerAccount);
 		} catch (ex) {
 			const msg = chalk.red(`Error compiling/deploying smart contract on path ${chalk.yellow(wasmFile)}`);
 			console.error(msg);

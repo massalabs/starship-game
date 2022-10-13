@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-glam = { version = "0.14", features = ["scalar-math","serde"] }

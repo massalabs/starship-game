@@ -1,4 +1,4 @@
-import { IAccount, ICallData, WalletClient } from "@massalabs/massa-web3";
+import { Client, IAccount, ICallData, IProvider, ProviderType, WalletClient } from "@massalabs/massa-web3";
 import { IContractData } from "@massalabs/massa-web3";
 import { IEventFilter } from "@massalabs/massa-web3";
 import { ClientFactory, DefaultProviderUrls } from "@massalabs/massa-web3";
@@ -7,13 +7,13 @@ import { IEvent } from "@massalabs/massa-web3";
 import { EventPoller } from "@massalabs/massa-web3";
 import { EOperationStatus } from "@massalabs/massa-web3";
 import { PathLike } from "fs";
+import { ICompiledSmartContract } from "@massalabs/massa-sc-utils/dist/interfaces/ICompiledSmartContract";
 const path = require("path");
 const fs = require("fs");
 const prompt = require("prompt");
 const chalk = require("chalk");
 const ora = require("ora");
 const exec = require("child_process").exec;
-import { ICompiledSmartContract } from "@massalabs/massa-sc-utils/dist/interfaces/ICompiledSmartContract";
 
 const SC_FOLDER: PathLike = "./game";
 const BUILD_FOLDER: PathLike = `${SC_FOLDER}/build`;
@@ -54,9 +54,9 @@ const schema = {
 		networkID: {
 			description: "Network ID",
 			message: "Must be one of MAINNET/TESTNET/LABNET",
-			pattern: "(MAINNET|mainnet|TESTNET|testnet|LABNET|labnet)",
+			pattern: "(MAINNET|mainnet|TESTNET|testnet|LABNET|labnet|IMMONET|immonet)",
 			type: "string",
-			default: "LABNET",
+			default: "IMMONET",
 			required: true
 		},
 		deployerSecretKey: {
@@ -142,28 +142,58 @@ prompt.get(schema, async (err, result) => {
 			}
 		}
 
-		// get input from prompt
-		const networkID: string = result.networkID.toUpperCase();
-		let selectedNetwork: DefaultProviderUrls = DefaultProviderUrls.TESTNET;
-		switch (networkID) {
-			case "TESTNET": {
-				selectedNetwork = DefaultProviderUrls.TESTNET;
-				break;
-			}
-			case "MAINNET": {
-				selectedNetwork = DefaultProviderUrls.MAINNET;
-				break;
-			}
-			case "LABNET": {
-				selectedNetwork = DefaultProviderUrls.LABNET;
-				break;
-			}
-			default: {
-				throw new Error(`Unknown network selected: ${networkID}`);
-			}
+		// init deployer account
+		const deployerSecretKey: string = result.deployerSecretKey;
+		let deployerAccount: IAccount;
+		try {
+			deployerAccount = await WalletClient.getAccountFromSecretKey(deployerSecretKey);
+		} catch (ex) {
+			throw new Error(`Wrong private key. Deployer account could not be initialized: ${ex}`);
 		}
 
-		const deployerSecretKey: string = result.deployerSecretKey;
+		// get input from prompt and init a web3 client
+		const networkID: string = result.networkID.toUpperCase();
+		let selectedNetwork: DefaultProviderUrls = DefaultProviderUrls.TESTNET;
+		let web3Client: Client = null;
+		try {
+			switch (networkID) {
+				case "TESTNET": {
+					selectedNetwork = DefaultProviderUrls.TESTNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "MAINNET": {
+					selectedNetwork = DefaultProviderUrls.MAINNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "LABNET": {
+					selectedNetwork = DefaultProviderUrls.LABNET;
+					web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
+					break;
+				}
+				case "IMMONET": {
+					const providers = [
+						{
+							url: "https://inno.massa.net/test13",
+							type: ProviderType.PUBLIC
+						} as IProvider,
+						{
+							url: "https://inno.massa.net/test13",
+							type: ProviderType.PRIVATE
+						} as IProvider
+					];
+					web3Client = await ClientFactory.createCustomClient(providers, true, deployerAccount);
+					break;
+				}
+				default: {
+					throw new Error(`Unknown network selected: ${networkID}`);
+				}
+			}
+		} catch (ex) {
+			throw new Error(`Error initializing a web3 client: ${ex}`);
+		}
+
 		const wasmFile: string = `./${BUILD_FOLDER}/${WASM_TO_DEPLOY}`;
 		if (!fs.existsSync(wasmFile)) {
 			throw new Error(`The wasm file under ${wasmFile} does not exist. Maybe you forgot to add BuildSmartContracts?`);
@@ -172,15 +202,6 @@ prompt.get(schema, async (err, result) => {
 		const maxGas: number = result.maxGas;
 		const gasPrice: number = result.gasPrice;
 		const coins: number = result.coins;
-
-		// init deployer account and a web3 client
-		let deployerAccount: IAccount;
-		try {
-			deployerAccount = await WalletClient.getAccountFromSecretKey(deployerSecretKey);
-		} catch (ex) {
-			throw new Error(`Wrong private key. Deployer account could not be initialized: ${ex}`);
-		}
-		const web3Client = await ClientFactory.createDefaultClient(selectedNetwork, true, deployerAccount);
 
 		// construct a sc utils helper
 		const utils = new SmartContractUtils();
@@ -257,7 +278,7 @@ prompt.get(schema, async (err, result) => {
 				emitter_address: null,
 			} as IEventFilter;
 			const events: Array<IEvent> = await EventPoller.getEventsOnce(eventsFilter, web3Client);
-			console.log("XXXXXXXXXXXXXXXXXXXXXXX EVENTS XXXXXXXXXXXXXXXXXXXXXXXX ", events);
+
 			const addressEvent: IEvent|undefined = events.find(event => event.data.includes("Address:"));
 			if (!addressEvent) {
 				throw new Error("No events were emitted from contract containing a message `Address:...`. Please make sure to include such a message in order to fetch the sc address");
