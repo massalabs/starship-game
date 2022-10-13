@@ -199,7 +199,7 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get player pos
-        
+        /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -212,7 +212,7 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("DATA ", readTxId[0].output_events[0].data);
-        
+        */
 
         // ========================================================================= 
 
@@ -286,18 +286,18 @@ import { IDatastoreEntryInput,
         console.log("PLAYER BALANCE ", readTxId[0].output_events[0].data);
         */
 
-        /*
+        
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
             maxGas: 200000,
             simulatedGasPrice: 0,
-            targetAddress: "A122k6dvHd3wRiTFLXxm6P7oTn7SKkSbG2feqdQBX9VXdDRHYE3W",
+            targetAddress: "A12eGhBWxKnfV46FpzuKKYGVyw3UnS7scAZuqv6aBXSxwXcGeA5C",
             targetFunction: "balanceOf",
             parameter: playerAddress,
             callerAddress: playerAddress
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
-        */
+        
 
         // ========================================================================= 
 

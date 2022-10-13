@@ -1,34 +1,33 @@
+/* eslint-disable require-jsdoc */
 import {token} from '@massalabs/massa-as-sdk/assembly';
 
-const allowance = token.allowance;
-export {allowance};
+export function version(_: string): string {
+  return token.version(_);
+}
 
-const balanceOf = token.balanceOf;
-export {balanceOf};
+export function balanceOf(args: string): string {
+  return token.balanceOf(args);
+}
 
-const increaseAllowance = token.increaseAllowance;
-export {increaseAllowance};
+export function transfer(args: string): string {
+  return token.transfer(args);
+}
 
-const decreaseAllowance = token.decreaseAllowance;
-export {decreaseAllowance};
+export function allowance(args: string): string {
+  return token.allowance(args);
+}
 
-const symbol = token.symbol;
-export {symbol};
+export function increaseAllowance(args: string): string {
+  return token.increaseAllowance(args);
+}
 
-const totalSupply = token.totalSupply;
-export {totalSupply};
+export function decreaseAllowance(args: string): string {
+  return token.decreaseAllowance(args);
+}
 
-const transfer = token.transfer;
-export {transfer};
-
-const transferFrom = token.transferFrom;
-export {transferFrom};
-
-const decimals = token.decimals;
-export {decimals};
-
-const version = token.version;
-export {version};
+export function transferFrom(args: string): string {
+  return token.transferFrom(args);
+}
 
 // For this example we just want to rename the token
 // Everything else will be kept as defined in the mscl-token/erc20 module
@@ -41,4 +40,19 @@ export {version};
  */
 export function name(_: string): string {
   return 'Massa Example token';
+}
+
+export function symbol(_: string): string {
+  // massa starship token
+  return 'MST';
+}
+
+export function totalSupply(_: string): string {
+  // eslint-disable-line @typescript-eslint/no-unused-vars
+  return '1000000';
+}
+
+export function decimals(_: string): string {
+  // eslint-disable-line @typescript-eslint/no-unused-vars
+  return '2';
 }
