@@ -285,7 +285,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
               break;
             }
             case TOKEN_COLLECTED: {
-              console.log("Token collected ");
+              //console.log("Token collected ");
               break;
             }
             case TOKEN_ADDED: {

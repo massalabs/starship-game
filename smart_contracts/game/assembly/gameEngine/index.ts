@@ -65,7 +65,6 @@ const TOTAL_ONSCREEN_TOKENS: u16 = 10;
 const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
 const PLAYER_BOUNDING_BOX: f32 = 64.0;
 const COLLECTIBLE_VALUE: Amount = new Amount(1);
-const COLLECTIONS_SEPARATOR: string = '@';
 
 // registered players map
 export const registeredPlayers = new collections.PersistentMap<string, boolean>(
@@ -441,7 +440,7 @@ export function setAbsCoors(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  // _checkTokenCollected(playerEntityUpdate);
+  _checkTokenCollectedAsync(serializedPlayerData);
 
   // send event
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
@@ -476,13 +475,10 @@ export function getPlayerTokens(address: string): string {
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
   // get player tokens from collections
   const tokens = playerTokens.get(playerAddress.toByteString());
-  let tokenCount = 0;
-  if (tokens) {
-    tokenCount = tokens.split('@').length;
-  }
+  const tokensCount = tokens ? parseInt(tokens, 10) : 0;
   // return player tokens
-  generateEvent(`${tokenCount.toString()}`);
-  return tokenCount.toString();
+  generateEvent(`${tokensCount.toString()}`);
+  return tokensCount.toString();
 }
 
 /**
@@ -566,7 +562,7 @@ export function moveByInc(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  // _checkTokenCollected(storedPlayerEntity);
+  _checkTokenCollectedAsync(serializedPlayerEntity);
 
   // send event to all players
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerEntity));
@@ -575,9 +571,15 @@ export function moveByInc(_args: string): void {
 /**
  * Check if a player has collected a token.
  *
- * @param {Entity} playerPos - Position of the player.
+ * @param {Entity} args - Position of the player.
  */
-function _checkTokenCollected(playerPos: PlayerEntity): void {
+export function _checkTokenCollected(args: string): void { // TODO: fix me! also pass the tokens state at the time of evaluation
+  // check that the caller is the contract itself
+  assert(Context.callee().equals(Context.caller()));
+
+  // retrieve the player entity
+  const playerPos = PlayerEntity.parseFromString(args);
+
   const playerCbox = new Rectangle(
       playerPos.x - playerPos.cbox,
       playerPos.x + playerPos.cbox,
@@ -603,9 +605,12 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
       );
 
       // add token to player collected tokens
-      let storedPlayerTokensSerialized = playerTokens.get(
+      const playerTokensCount = playerTokens.get(
           playerPos.address
       );
+      const playerTokensNumber = (playerTokensCount ? parseInt(playerTokensCount, 10) : 0) + 1;
+      // add update back to hashmap
+      playerTokens.set(playerPos.address, playerTokensNumber.toString());
 
       // append currently collected token to state
       const collectedEntity: CollectedEntity = {
@@ -614,17 +619,9 @@ function _checkTokenCollected(playerPos: PlayerEntity): void {
         value: collectibleEntity.value,
         time: env.env.time() as f64,
       } as CollectedEntity;
-      if (storedPlayerTokensSerialized) {
-        storedPlayerTokensSerialized = storedPlayerTokensSerialized.concat(COLLECTIONS_SEPARATOR).concat(collectedEntity.serializeToString());
-      } else {
-        storedPlayerTokensSerialized = collectedEntity.serializeToString();
-      }
-
-      // add update back to hashmap
-      playerTokens.set(playerPos.address, storedPlayerTokensSerialized);
 
       // generate an event and send to all players
-      _generateEvent(_formatGameEvent(TOKEN_COLLECTED, collectedEntity.serializeToString()));
+      _sendGameEvent(_formatGameEvent(TOKEN_COLLECTED, collectedEntity.serializeToString()));
     }
   }
 }
@@ -895,6 +892,38 @@ function _generateEvent(data: string): void {
   sendMessage(
       curAddr,
       '_sendGameEvent',
+      nextPeriod, // validityStartPeriod
+      nextThread, // validityStartThread
+      nextPeriod + 5, // validityEndPeriod
+      nextThread, // validityEndThread
+      70000000,
+      0,
+      0,
+      data
+  );
+}
+
+/**
+ * Player collects a token.
+ *
+ * @param {string} data - Self-calling function for generating collectibles.
+ */
+function _checkTokenCollectedAsync(data: string): void {
+  const curThread = currentThread();
+  const curPeriod = currentPeriod();
+
+  let nextThread = curThread + 1;
+  let nextPeriod = curPeriod;
+  if (nextThread >= THREADS) {
+    ++nextPeriod;
+    nextThread = 0;
+  }
+  // sc address
+  const curAddr = Context.callee();
+
+  sendMessage(
+      curAddr,
+      '_checkTokenCollected',
       nextPeriod, // validityStartPeriod
       nextThread, // validityStartThread
       nextPeriod + 5, // validityEndPeriod

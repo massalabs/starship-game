@@ -174,7 +174,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
     } else if operation.eq(&JsValue::from(TOKEN_COLLECTED)) {
-        //info!("TOKEN_COLLECTED");
+        info!("TOKEN_COLLECTED");
         None
     } else if operation.eq(&JsValue::from(TOKEN_ADDED)) {
         //info!("TOKEN_ADDED");
