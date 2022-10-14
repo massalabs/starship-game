@@ -143,7 +143,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                0.0f32,
+                rot.as_f64().unwrap() as f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
@@ -156,7 +156,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                0.0f32,
+                rot.as_f64().unwrap() as f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
@@ -169,7 +169,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                0.0f32,
+                rot.as_f64().unwrap() as f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))

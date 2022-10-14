@@ -30,7 +30,7 @@ const TOKEN_REMOVED = "TOKEN_REMOVED";
 const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
 // settings consts
-const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 500; // ms = 0.5 secs. Every half a sec update the player pos on chain
+const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 300; // ms = 0.3 secs. Every half a sec update the player pos on chain
 const GAME_EVENTS_POLLING_INTERVAL = 100; // 500 ms = 0.5 sec.
 const SCREEN_WIDTH = 1000; //px
 const SCREEN_HEIGHT = 500; //px

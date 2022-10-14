@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12Xef35cnVNtUqSfeGyf1FUVJGoECdvcF17g4Cx3iiX6GUnris9";
+        const scAddress = "A1GFGWyf7aHVEAtChBaW8vi5TgehpckXes17LqFccrNoax5eYTd";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -95,7 +95,7 @@ import { IDatastoreEntryInput,
         // ============================================
 
         // remove player
-        /*
+        
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -123,7 +123,7 @@ import { IDatastoreEntryInput,
         } as IEventFilter, web3Client);
 
         console.log("REMOVE PLAYER EVENTS ", events);
-        */
+        
 
         // ========================================================================= 
 
@@ -253,7 +253,7 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get player tokens
-        
+        /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -266,7 +266,7 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("PLAYER TOKENS ", readTxId[0].output_events[0].data);
-        
+        */
 
         // ========================================================================= 
 
