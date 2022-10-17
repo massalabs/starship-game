@@ -22,14 +22,6 @@ pub struct Velocity {
 }
 
 #[derive(Component, Clone, Debug)]
-pub struct Blockchainable {
-    pub address: String,
-}
-
-#[derive(Component, Clone, Debug)]
-pub struct Identifyable(pub String);
-
-#[derive(Component, Clone, Debug)]
 pub struct Collectible;
 
 #[derive(Component, Clone, Debug)]

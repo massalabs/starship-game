@@ -82,7 +82,8 @@
     "ts-node": "^10.7.0"
   },
   "scripts": {
-    "start": "react-app-rewired start",
+    "start": "PORT=2000  react-app-rewired start",
+    "start2": "PORT=3000  react-app-rewired start",
     "build": "react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",

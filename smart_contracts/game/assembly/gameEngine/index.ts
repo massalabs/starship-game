@@ -440,7 +440,7 @@ export function setAbsCoors(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  _checkTokenCollectedAsync(serializedPlayerData);
+  // _checkTokenCollectedAsync(serializedPlayerData);
 
   // send event
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
@@ -562,7 +562,7 @@ export function moveByInc(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  _checkTokenCollectedAsync(serializedPlayerEntity);
+  // _checkTokenCollectedAsync(serializedPlayerEntity);
 
   // send event to all players
   _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerEntity));

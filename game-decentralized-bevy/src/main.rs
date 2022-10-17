@@ -1,10 +1,9 @@
 use crate::resources::RemoteGamePlayerState;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use components::{
-    Blockchainable, Collectible, Identifyable, Movable, RemotePlayer, SpriteSize,
-    Velocity, RequiresKinematicUpdate,
+    Collectible, Movable, RemotePlayer, RequiresKinematicUpdate, SpriteSize, Velocity,
 };
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use player::PlayerPlugin;
@@ -143,7 +142,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                rot.as_f64().unwrap() as f32,
+                0.0f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
@@ -156,7 +155,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                rot.as_f64().unwrap() as f32,
+                0.0f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
@@ -169,7 +168,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
             position: Vec3::new(
                 x.as_f64().unwrap() as f32,
                 y.as_f64().unwrap() as f32,
-                rot.as_f64().unwrap() as f32,
+                0.0f32,
             ),
             rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
         }))
@@ -239,10 +238,6 @@ fn entities_from_blockchain_update_system(
                                 linear: LINEAR_MOVEMENT_SPEED,
                                 rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
                             })
-                            .insert(Blockchainable {
-                                address: player_added.address.clone(),
-                            })
-                            .insert(Identifyable(player_added.uuid.clone()))
                             .id();
 
                         game_state.add_new_player_entity(&player_added.uuid, spawned_remote_player);
@@ -258,16 +253,19 @@ fn entities_from_blockchain_update_system(
                     game_state.remove_player(&player_to_remove.uuid);
                 }
                 Some(RemoteStateType::PlayerMoved(player_moved)) => {
-
                     // check to see if the player has an entity id already (is registered). If not, skip update
                     if let Some(player) = game_state.entity_players.get(&player_moved.uuid) {
                         // add a component
-                        commands.entity(*player).insert(RequiresKinematicUpdate(player_moved.uuid.clone()));
+                        commands
+                            .entity(*player)
+                            .insert(RequiresKinematicUpdate(player_moved.uuid.clone()));
                     }
 
                     if let Some(_player) = game_state.remote_players.get(&player_moved.uuid) {
                         // update the inner state
-                        game_state.remote_players.insert(player_moved.uuid.clone(), player_moved.clone());
+                        game_state
+                            .remote_players
+                            .insert(player_moved.uuid.clone(), player_moved.clone());
                     }
                 }
                 Some(RemoteStateType::TokenCollected(token_collected)) => { /* TODO */ }
@@ -288,7 +286,6 @@ fn entities_from_blockchain_update_system(
                             .insert(Collectible)
                             .insert(SpriteSize::from(COLLECTIBLE_SIZE))
                             .insert(Movable { auto_despawn: true })
-                            .insert(Identifyable(state.uuid.clone()))
                             .id()
                     };
 
@@ -318,7 +315,10 @@ fn entities_from_blockchain_update_system(
 fn only_entities_with_kinematic_update(
     mut commands: Commands,
     game_state: Res<RemoteGameState>,
-    mut query: Query<(Entity, &mut Transform, &RequiresKinematicUpdate), (With<RequiresKinematicUpdate>, With<RemotePlayer>)>,
+    mut query: Query<
+        (Entity, &mut Transform, &RequiresKinematicUpdate),
+        (With<RequiresKinematicUpdate>, With<RemotePlayer>),
+    >,
 ) {
     for (entity, mut transform, kinematic_update) in query.iter_mut() {
         if let Some(player_updated_state) = game_state.remote_players.get(&kinematic_update.0) {

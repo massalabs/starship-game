@@ -1,7 +1,7 @@
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    components::{Blockchainable, Identifyable, LocalPlayer, Movable, SpriteSize, Velocity},
+    components::{LocalPlayer, Movable, SpriteSize, Velocity},
     events::PlayerMoved,
     resources::GameTextures,
     wasm::LOCAL_PLAYER_POSITION,
@@ -20,10 +20,13 @@ impl Plugin for PlayerPlugin {
         app.add_startup_system_to_stage(StartupStage::PostStartup, player_spawn_system);
 
         app.add_system_set(
-            SystemSet::new().with_run_criteria(FixedTimestep::step(TIME_STEP as f64)), //.with_system(player_spawn_system),
+            SystemSet::new()
+                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                .with_system(player_movement_system)
+                .with_system(on_player_moved_system),
         );
-        app.add_system(player_movement_system);
-        app.add_system(on_player_moved_system);
+        //app.add_system(player_movement_system);
+        //app.add_system(on_player_moved_system);
     }
 }
 
@@ -46,11 +49,7 @@ fn player_spawn_system(
         .insert(Velocity {
             linear: LINEAR_MOVEMENT_SPEED,
             rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
-        })
-        .insert(Blockchainable {
-            address: "".to_owned(),
-        }) // TODO: get address from outside
-        .insert(Identifyable("uuid".to_owned())); // TODO: get ID from outside
+        });
 }
 
 fn player_movement_system(
@@ -64,13 +63,9 @@ fn player_movement_system(
     // ship rotation
     let mut rotation_factor = 0.0;
     let mut movement_factor = 0.0;
-    let mut extra_acceleration = 1.0f32;
 
     if keyboard_input.pressed(KeyCode::Up) {
         movement_factor += 1.0;
-        if keyboard_input.pressed(KeyCode::Space) {
-            extra_acceleration = 2.0;
-        }
     }
 
     if keyboard_input.pressed(KeyCode::Left) {
@@ -90,7 +85,7 @@ fn player_movement_system(
     // get the ship's forward vector by applying the current rotation to the ships initial facing vector
     let movement_direction = transform.rotation * Vec3::Y;
     // get the distance the ship will move based on direction, the ship's movement speed and delta time
-    let movement_distance = movement_factor * velocity.linear * extra_acceleration * TIME_STEP;
+    let movement_distance = movement_factor * velocity.linear * TIME_STEP;
     // create the change in translation using the new movement direction and distance
     let translation_delta = movement_direction * movement_distance;
     // update the ship translation with our new translation delta

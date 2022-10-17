@@ -1,4 +1,4 @@
-import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IEventFilter, INodeStatus, IReadData } from "@massalabs/massa-web3";
+import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./PlayerEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
 
@@ -69,10 +69,32 @@ export const getPlayerPos = async (web3Client: Client, gameAddress: string, play
         throw ex;
     }
 
-    console.log("Player position", playerEntity);
-
     return playerEntity as IPlayerOnchainEntity;
 }
+
+export const getPlayerCandidatePositionFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `registered_players_states_key::${playerAddress}` } as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+
+  if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
+    return null;
+  }
+  const candidatePos = scStorageData[0].candidate;
+  let playerEntity: IPlayerOnchainEntity|undefined = undefined;
+  try {
+      playerEntity = JSON.parse(candidatePos as string);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", candidatePos);
+      throw ex;
+  }
+  return playerEntity as IPlayerOnchainEntity;
+}
+
 
 export const isPlayerRegistered = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<boolean> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({
@@ -157,6 +179,21 @@ export const getPlayerTokens = async (web3Client: Client, gameAddress: string, p
       callerAddress: playerAddress
   } as IReadData);
   return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+export const disconnectPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<void> => {
+  const callTxId = await web3Client.smartContracts().callSmartContract({
+    fee: 0,
+    gasPrice: 0,
+    maxGas: 200000,
+    parallelCoins: 0,
+    sequentialCoins: 0,
+    targetAddress: gameAddress,
+    functionName: "removePlayer",
+    parameter: playerAddress,
+  } as ICallData);
+  const callScOperationId = callTxId[0];
+  console.log("Disconnect player opId ", callScOperationId);
 }
 
 export const getCollectiblesState = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<ITokenOnchainEntity>> => {

@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A1GFGWyf7aHVEAtChBaW8vi5TgehpckXes17LqFccrNoax5eYTd";
+        const scAddress = "A17eEwf99AyWEUcG1QwYV6kabYjBtC4s2qWTc1oSC6MvNcCgVeY";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -95,7 +95,7 @@ import { IDatastoreEntryInput,
         // ============================================
 
         // remove player
-        
+        /*
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -123,7 +123,7 @@ import { IDatastoreEntryInput,
         } as IEventFilter, web3Client);
 
         console.log("REMOVE PLAYER EVENTS ", events);
-        
+        */
 
         // ========================================================================= 
 
@@ -320,11 +320,11 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get sc storage data
-        /*
+        
         console.log(`Reading a smart state entry...`);
-        const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: "getMassaTokensState" } as IDatastoreEntryInput]);
+        const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: `registered_players_states_key::${playerAddress}` } as IDatastoreEntryInput]);
         console.log(`Got smart contract storage data for key: ${(JSON.stringify(scStorageData, null, 4))}`);
-        */
+        
 
     } catch (ex) {
         const msg = console.log(`Error = ${(ex as Error).message}`);

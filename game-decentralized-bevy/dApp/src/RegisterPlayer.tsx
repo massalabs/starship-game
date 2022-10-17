@@ -12,9 +12,8 @@ import MenuItem from '@mui/material/MenuItem';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./PlayerEntity";
-import { getPlayerPos, registerPlayer, isPlayerRegistered, getCollectiblesState, getPlayerBalance, getPlayerTokens } from "./gameFunctions";
+import { getPlayerPos, registerPlayer, isPlayerRegistered, getPlayerBalance, getPlayerTokens } from "./gameFunctions";
 import { generateThreadAddressesMap, getProviderUrl, networks, networkValues } from "./utils";
-import { ITokenOnchainEntity } from "./TokenEntity";
 import { Navigate } from "react-router-dom";
 
 const style = {
@@ -41,7 +40,6 @@ export interface IPropState {
   playerName: string;
   networkName: string;
   isPlayerRegistered: boolean;
-  tokensInitialState: Array<ITokenOnchainEntity>;
   threadAddressesMap: Object;
   playerOnchainState: IPlayerOnchainEntity | undefined;
   playerBalance: number;
@@ -66,7 +64,6 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       networkName: networks.IMMONET.value,
       showModal: true,
       isPlayerRegistered: false,
-      tokensInitialState: [],
       threadAddressesMap: new Map<number, IAccount>(),
       playerOnchainState: undefined,
       playerBalance: 0,
@@ -202,28 +199,12 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       }
     }
 
-    // get collectibles initial state and send it to the game engine
-    let tokensInitialState: Array<ITokenOnchainEntity> = [];
-    try {
-      tokensInitialState = await getCollectiblesState(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
-    } catch (ex) {
-      console.error("Error getting tokens initial state...", ex);
-      this.setState({ isRegisteringPlayer: false });
-      toast(`Error getting collectibles state ${(ex as Error).message}!`,{
-        className: "toast",
-        type: "error"
-      });
-    }
-
-    // TODO: get all active players at the time of joining
-
     // update react state
     if (playerEntity) {
       this.setState((prevState: IState, _prevProps: IProps) => {
         return { ...prevState,
               showModal: false,
               isPlayerRegistered: true,
-              tokensInitialState,
               playerBalance,
               playerTokens,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
