@@ -330,7 +330,8 @@ export function registerPlayer(args: string): void {
     name: playerRegisterRequest.name,
     x: 0.0,
     y: 0.0,
-    rot: 90.0,
+    rot: 0.0,
+    w: 0.0,
     cbox: PLAYER_BOUNDING_BOX,
   } as PlayerEntity;
   const serializedPlayerData: string = playerEntity.serializeToString();
@@ -519,53 +520,6 @@ export function getCollectiblesState(_args: string): string {
   const res = generatedRandomTokens.join('@');
   generateEvent(`${res}`);
   return res;
-}
-
-/**
- * Moves the player to a certain position by an increment.
- *
- * @param {string} _args - stringified PlayArgs.
- */
-export function moveByInc(_args: string): void {
-  // read current increments
-  const newPlayerPos = PlayerEntity.parseFromString(_args);
-
-  // check that player is already registered
-  assert(
-      _isPlayerRegistered(new Address(newPlayerPos.address)),
-      'Player has not been registered'
-  );
-
-  // TODO: verify that is one of the player signing addresses (thread addresses) + it has the right address and uuid
-  // also verify coords against cheating ????
-
-  // read old player position
-  const storedPlayerSerialized = playerStates.get(
-      newPlayerPos.address
-  ); // infallible as we have checked the condition above
-  const storedPlayerEntity = PlayerEntity.parseFromString(
-    <string>storedPlayerSerialized
-  );
-
-  // update player coords
-  storedPlayerEntity.x += newPlayerPos.x;
-  storedPlayerEntity.y = newPlayerPos.y;
-  storedPlayerEntity.rot += newPlayerPos.rot;
-
-  // serialize player data
-  const serializedPlayerEntity = storedPlayerEntity.serializeToString();
-
-  // update storage
-  playerStates.set(
-      storedPlayerEntity.address,
-      serializedPlayerEntity
-  );
-
-  // check if player has collected a token based on his pos
-  // _checkTokenCollectedAsync(serializedPlayerEntity);
-
-  // send event to all players
-  _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerEntity));
 }
 
 /**

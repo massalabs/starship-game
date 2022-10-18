@@ -9,13 +9,14 @@ extern "C" {
 }
 
 // Local single thread recording player movements on every frame RUST -> JS
-thread_local!(pub static LOCAL_PLAYER_POSITION: RefCell<Position> = RefCell::new(Position{x: 0.0, y: 0.0, rot: 0.0}));
+thread_local!(pub static LOCAL_PLAYER_POSITION: RefCell<Position> = RefCell::new(Position{x: 0.0, y: 0.0, rot: 0.0, w: 0.0}));
 
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
     pub rot: f32,
+    pub w: f32,
 }
 
 impl Position {
@@ -24,9 +25,11 @@ impl Position {
         pos: Vec3,
         rot: Quat,
     ) {
+        //let (vec, angle) = rot.to_axis_angle();
         self.x = pos.x;
         self.y = pos.y;
         self.rot = rot.z;
+        self.w = rot.w;
     }
 
     pub fn set_pos(
@@ -34,10 +37,12 @@ impl Position {
         x: f32,
         y: f32,
         rot: f32,
+        w: f32,
     ) {
         self.x = x;
         self.y = y;
         self.rot = rot;
+        self.w = w;
     }
 }
 
@@ -62,6 +67,12 @@ pub fn get_player_rot() -> f32 {
     rotation
 }
 
+#[wasm_bindgen]
+pub fn get_player_w() -> f32 {
+    let rotation = LOCAL_PLAYER_POSITION.with(|pos| pos.borrow().w);
+    rotation
+}
+
 // ========================================================================================== //
 
 // A JS < -- > RUST mapped object
@@ -79,6 +90,7 @@ extern "C" {
         x: f32,
         y: f32,
         rot: f32,
+        w: f32,
     ) -> GameEntityUpdate;
 
     // --------OPERATION--------------- //
@@ -150,6 +162,16 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, js_name = get_rot)]
     fn get_rot(this: &GameEntityUpdate) -> Option<f32>;
+
+    // ---------W-------------- //
+    #[wasm_bindgen(method, setter, js_name = set_w)]
+    fn set_w(
+        this: &GameEntityUpdate,
+        value: f32,
+    );
+
+    #[wasm_bindgen(method, getter, js_name = get_w)]
+    fn get_w(this: &GameEntityUpdate) -> Option<f32>;
 }
 
 // local communication thread between js and the game engine [JS (write) --> RUST game loop (read)]

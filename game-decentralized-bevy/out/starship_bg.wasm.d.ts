@@ -4,6 +4,7 @@ export const memory: WebAssembly.Memory;
 export function get_player_x(): number;
 export function get_player_y(): number;
 export function get_player_rot(): number;
+export function get_player_w(): number;
 export function push_game_entity_updates(a: number, b: number): void;
 export function main(a: number, b: number): number;
 export function wgpu_render_pass_set_pipeline(a: number, b: number): void;

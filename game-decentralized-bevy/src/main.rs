@@ -1,10 +1,9 @@
 use crate::resources::RemoteGamePlayerState;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
-use components::{
-    Collectible, Movable, RemotePlayer, RequiresKinematicUpdate, SpriteSize, Velocity,
-};
+use components::{Collectible, Movable, RemotePlayer, SpriteSize, Velocity};
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use player::PlayerPlugin;
 use resources::{GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType, WinSize};
@@ -30,10 +29,14 @@ const SCREEN_HEIGHT: f32 = 500.0;
 const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 
 // player speeds
-const LINEAR_MOVEMENT_SPEED: f32 = 60.0; // linear speed in meters per second
-const LINEAR_ROTATION_SPEED: f32 = 360.0; // rotation speed in radians per second
+const LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
+const LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
 
-const PLAYER_SPRITE: &str = "entities/ship_64x64.png";
+const PLAYER_SPRITES: [(usize, &str); 3] = [
+    (1, "entities/planes_1.png"),
+    (2, "entities/planes_2.png"),
+    (3, "entities/planes_3.png"),
+];
 const PLAYER_SIZE: (f32, f32) = (64., 64.);
 
 const BACKGROUND_SPRITE: &str = "entities/galaxy.png";
@@ -70,7 +73,7 @@ fn main() {
     //app.add_startup_system(setup_system);
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
     app.add_system(entities_from_blockchain_update_system);
-    app.add_system(only_entities_with_kinematic_update);
+    app.add_system(interpolate_entities_state_system);
     app.run();
 }
 
@@ -93,10 +96,13 @@ fn setup_system(
     // load texture atlas and create a resource with Textures
     let background_texture = asset_server.load(BACKGROUND_SPRITE);
     let collectible_texture = asset_server.load(COLLECTIBLE_SPRITE);
-    let player_texture = asset_server.load(PLAYER_SPRITE);
+    let player_sprites = PLAYER_SPRITES
+        .iter()
+        .map(|(index, s)| (*index, asset_server.load(*s)))
+        .collect::<HashMap<usize, Handle<Image>>>();
 
     let game_textures = GameTextures {
-        player: player_texture.clone(),
+        player: player_sprites,
         collectible: collectible_texture.clone(),
         background: background_texture.clone(),
     };
@@ -132,9 +138,10 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
     let x = get_value_for_key("x", &js_obj).expect("Some x to be present");
     let y = get_value_for_key("y", &js_obj).expect("Some y to be present");
     let rot = get_value_for_key("rot", &js_obj).expect("Some rot to be present");
+    let w = get_value_for_key("w", &js_obj).expect("Some w to be present");
 
     let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) {
-        info!("PLAYER_ADDED");
+        //info!("PLAYER_ADDED");
         Some(RemoteStateType::PlayerAdded(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
@@ -144,10 +151,15 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 y.as_f64().unwrap() as f32,
                 0.0f32,
             ),
-            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
+            rotation: Quat::from_array([
+                0.,
+                0.,
+                rot.as_f64().unwrap() as f32,
+                w.as_f64().unwrap() as f32,
+            ]),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_MOVED)) {
-        info!("PLAYER_MOVED");
+        //info!("PLAYER_MOVED");
         Some(RemoteStateType::PlayerMoved(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
@@ -157,10 +169,15 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 y.as_f64().unwrap() as f32,
                 0.0f32,
             ),
-            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
+            rotation: Quat::from_array([
+                0.,
+                0.,
+                rot.as_f64().unwrap() as f32,
+                w.as_f64().unwrap() as f32,
+            ]),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_REMOVED)) {
-        info!("PLAYER_REMOVED");
+        //info!("PLAYER_REMOVED");
         Some(RemoteStateType::PlayerRemoved(RemoteGamePlayerState {
             uuid: uuid.as_string().unwrap(),
             address: address.as_string().unwrap(),
@@ -170,10 +187,10 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 y.as_f64().unwrap() as f32,
                 0.0f32,
             ),
-            rotation: Quat::from_rotation_z(rot.as_f64().unwrap() as f32),
+            rotation: Quat::NAN,
         }))
     } else if operation.eq(&JsValue::from(TOKEN_COLLECTED)) {
-        info!("TOKEN_COLLECTED");
+        //info!("TOKEN_COLLECTED");
         None
     } else if operation.eq(&JsValue::from(TOKEN_ADDED)) {
         //info!("TOKEN_ADDED");
@@ -219,7 +236,15 @@ fn entities_from_blockchain_update_system(
                         .add_new_player(&player_added.uuid, player_added.clone())
                         .is_none()
                     {
-                        let player_texture = game_textures.player.clone();
+                        let player_texture_index = std::cmp::max(
+                            game_state.remote_players.len() + 1,
+                            PLAYER_SPRITES.len(),
+                        );
+                        let player_texture = game_textures
+                            .player
+                            .get(&player_texture_index)
+                            .cloned()
+                            .unwrap();
 
                         let spawned_remote_player = commands
                             .spawn_bundle(SpriteBundle {
@@ -227,11 +252,12 @@ fn entities_from_blockchain_update_system(
                                 transform: Transform {
                                     translation: player_added.position,
                                     rotation: player_added.rotation,
+                                    scale: Vec3::new(0.15, 0.15, -1.),
                                     ..Default::default()
                                 },
                                 ..Default::default()
                             })
-                            .insert(RemotePlayer)
+                            .insert(RemotePlayer(player_added.uuid.clone()))
                             .insert(SpriteSize::from(PLAYER_SIZE))
                             .insert(Movable { auto_despawn: true })
                             .insert(Velocity {
@@ -254,13 +280,6 @@ fn entities_from_blockchain_update_system(
                 }
                 Some(RemoteStateType::PlayerMoved(player_moved)) => {
                     // check to see if the player has an entity id already (is registered). If not, skip update
-                    if let Some(player) = game_state.entity_players.get(&player_moved.uuid) {
-                        // add a component
-                        commands
-                            .entity(*player)
-                            .insert(RequiresKinematicUpdate(player_moved.uuid.clone()));
-                    }
-
                     if let Some(_player) = game_state.remote_players.get(&player_moved.uuid) {
                         // update the inner state
                         game_state
@@ -312,20 +331,20 @@ fn entities_from_blockchain_update_system(
     });
 }
 
-fn only_entities_with_kinematic_update(
+fn interpolate_entities_state_system(
     mut commands: Commands,
-    game_state: Res<RemoteGameState>,
-    mut query: Query<
-        (Entity, &mut Transform, &RequiresKinematicUpdate),
-        (With<RequiresKinematicUpdate>, With<RemotePlayer>),
-    >,
+    mut game_state: ResMut<RemoteGameState>,
+    mut query: Query<(Entity, &mut Transform, &Velocity, &RemotePlayer), With<RemotePlayer>>,
 ) {
-    for (entity, mut transform, kinematic_update) in query.iter_mut() {
-        if let Some(player_updated_state) = game_state.remote_players.get(&kinematic_update.0) {
-            transform.translation = player_updated_state.position;
+    for (entity, mut transform, velocity, remote_player) in query.iter_mut() {
+        if let Some(player_updated_state) = game_state.remote_players.get_mut(&remote_player.0) {
             transform.rotation = player_updated_state.rotation;
+            let movement_direction = transform.rotation * Vec3::Y;
+            transform.translation += movement_direction * velocity.linear * TIME_STEP;
+
+            // apply bounds to movement
+            let extents = Vec3::from((BOUNDS / 2.0, 0.0));
+            transform.translation = transform.translation.clamp(-extents, extents);
         }
-        // remove the component RequiresKinematicUpdate
-        commands.entity(entity).remove::<RequiresKinematicUpdate>();
     }
 }

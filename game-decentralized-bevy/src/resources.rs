@@ -1,9 +1,9 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct GameTextures {
-    pub player: Handle<Image>,
+    pub player: HashMap<usize, Handle<Image>>,
     pub collectible: Handle<Image>,
     pub background: Handle<Image>,
 }

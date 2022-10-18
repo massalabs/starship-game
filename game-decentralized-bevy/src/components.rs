@@ -28,7 +28,4 @@ pub struct Collectible;
 pub struct LocalPlayer;
 
 #[derive(Component, Clone, Debug)]
-pub struct RemotePlayer;
-
-#[derive(Component, Clone, Debug)]
-pub struct RequiresKinematicUpdate(pub String); // the uuid
+pub struct RemotePlayer(pub String); // the uuid

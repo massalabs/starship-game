@@ -13,6 +13,10 @@ export function get_player_y(): number;
 */
 export function get_player_rot(): number;
 /**
+* @returns {number}
+*/
+export function get_player_w(): number;
+/**
 * @param {any[]} updated_entities
 */
 export function push_game_entity_updates(updated_entities: any[]): void;
@@ -24,6 +28,7 @@ export interface InitOutput {
   readonly get_player_x: () => number;
   readonly get_player_y: () => number;
   readonly get_player_rot: () => number;
+  readonly get_player_w: () => number;
   readonly push_game_entity_updates: (a: number, b: number) => void;
   readonly main: (a: number, b: number) => number;
   readonly wgpu_render_pass_set_pipeline: (a: number, b: number) => void;

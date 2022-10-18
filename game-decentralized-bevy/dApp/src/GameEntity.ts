@@ -6,8 +6,9 @@ export class GameEntityUpdate {
     public x: number;
     public y: number;
     public rot: number;
+    public w: number;
   
-    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number) {
+    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number, w: number) {
       this.operation = operation;
       this.uuid = uuid;
       this.address = address;
@@ -15,6 +16,7 @@ export class GameEntityUpdate {
       this.x = x;
       this.y = y;
       this.rot = rot;
+      this.w = w;
     }
     // ------------------------------------
     set set_operation(operation: string) {
@@ -64,5 +66,12 @@ export class GameEntityUpdate {
     }
     get get_rot() {
         return this.rot;
+    }
+    // ------------------------------------
+    set set_w(w: number) {
+        this.w = w;
+    }
+    get get_w() {
+        return this.w;
     }
   }

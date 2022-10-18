@@ -7,6 +7,7 @@ export interface IPlayerGameEntity {
   x: number;
   y: number;
   rot: number;
+  w: number;
 }
 
 export interface IPlayerOnchainEntity extends IPlayerGameEntity {

@@ -10,6 +10,7 @@ export class PlayerEntity {
   x: f32 = 0.0;
   y: f32 = 0.0;
   rot: f32 = 0.0;
+  w: f32 = 0.0;
   cbox: f32 = 0.0;
 
   serializeToString(): string {

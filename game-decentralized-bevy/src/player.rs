@@ -5,7 +5,7 @@ use crate::{
     events::PlayerMoved,
     resources::GameTextures,
     wasm::LOCAL_PLAYER_POSITION,
-    BOUNDS, LINEAR_MOVEMENT_SPEED, LINEAR_ROTATION_SPEED, PLAYER_SIZE, TIME_STEP,
+    BOUNDS, LINEAR_MOVEMENT_SPEED, LINEAR_ROTATION_SPEED, PLAYER_SIZE, SCREEN_HEIGHT, TIME_STEP,
 };
 
 pub struct PlayerPlugin;
@@ -16,9 +16,7 @@ impl Plugin for PlayerPlugin {
         app: &mut App,
     ) {
         app.add_event::<PlayerMoved>();
-
         app.add_startup_system_to_stage(StartupStage::PostStartup, player_spawn_system);
-
         app.add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
@@ -34,11 +32,17 @@ fn player_spawn_system(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
 ) {
-    let player_texture = game_textures.player.clone();
+    let player_texture = game_textures.player.get(&1).cloned().unwrap();
 
     commands
         .spawn_bundle(SpriteBundle {
             texture: player_texture,
+            transform: Transform {
+                translation: Vec3::new(0., SCREEN_HEIGHT / 2., 0.),
+                rotation: Quat::from_rotation_z(0.),
+                scale: Vec3::new(0.15, 0.15, -1.),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .insert(LocalPlayer)
@@ -62,11 +66,6 @@ fn player_movement_system(
 
     // ship rotation
     let mut rotation_factor = 0.0;
-    let mut movement_factor = 0.0;
-
-    if keyboard_input.pressed(KeyCode::Up) {
-        movement_factor += 1.0;
-    }
 
     if keyboard_input.pressed(KeyCode::Left) {
         rotation_factor += 1.0;
@@ -77,23 +76,13 @@ fn player_movement_system(
     }
 
     let rotation_delta = Quat::from_rotation_z(rotation_factor * velocity.rotational * TIME_STEP);
-
     transform.rotation *= rotation_delta;
 
-    // forward and backwards translation
-
-    // get the ship's forward vector by applying the current rotation to the ships initial facing vector
     let movement_direction = transform.rotation * Vec3::Y;
-    // get the distance the ship will move based on direction, the ship's movement speed and delta time
-    let movement_distance = movement_factor * velocity.linear * TIME_STEP;
-    // create the change in translation using the new movement direction and distance
-    let translation_delta = movement_direction * movement_distance;
-    // update the ship translation with our new translation delta
-    // bound the ship within the invisible level bounds
+    transform.translation += movement_direction * velocity.linear * TIME_STEP;
+
+    // limit the movement within the screen
     let extents = Vec3::from((BOUNDS / 2.0, 0.0));
-
-    transform.translation += translation_delta;
-
     transform.translation = transform.translation.clamp(-extents, extents);
 
     // send message about player translation
