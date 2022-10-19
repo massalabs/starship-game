@@ -22,7 +22,7 @@ pub struct Velocity {
 }
 
 #[derive(Component, Clone, Debug)]
-pub struct Collectible;
+pub struct Collectible(pub String); // the uuid
 
 #[derive(Component, Clone, Debug)]
 pub struct LocalPlayer;

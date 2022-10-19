@@ -60,7 +60,6 @@ const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 
 // settings
 const THREADS: u8 = 32;
-const NEW_COLLECTIBLES_GENERATION_IN_THREADS: u8 = 100;
 const TOTAL_ONSCREEN_TOKENS: u16 = 10;
 const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
 const PLAYER_BOUNDING_BOX: f32 = 64.0;
@@ -693,10 +692,6 @@ export function asyncCreateCollectibles(_args: string): void {
   const curThread = currentThread();
   const curPeriod = currentPeriod();
 
-  // generateEvent(
-  //     `asyncCreateCollectibles called (thread = ${curThread}, period = ${curPeriod}))`
-  // );
-
   // check that the current slot index is strictly higher than the last time we were called
   const lastSlotIndex: u64 = u64(parseInt(Storage.get(LAST_SLOT_INDEX_KEY)));
 
@@ -731,12 +726,11 @@ export function asyncCreateCollectibles(_args: string): void {
   }
 
   // emit wakeup message
-  let nextThread = 31 as u8; // choose max. delay
-  let nextPeriod = curPeriod;
-  if (nextThread >= THREADS) {
-    ++nextPeriod;
-    nextThread = 0;
-  }
+  const nextThreadStartValidity = curThread + 1;
+  const nextPeriodStartValidity = curPeriod + 5;
+  const nextThreadEndValidity = curThread + 1;
+  const nextPeriodEndValidity = curPeriod + 10;
+
   // sc address
   const curAddr = Context.callee();
 
@@ -744,19 +738,15 @@ export function asyncCreateCollectibles(_args: string): void {
   sendMessage(
       curAddr,
       'asyncCreateCollectibles',
-      nextPeriod, // validityStartPeriod
-      nextThread, // validityStartThread
-      nextPeriod + NEW_COLLECTIBLES_GENERATION_IN_THREADS, // validityEndPeriod
-      nextThread, // validityEndThread
+      nextPeriodStartValidity, // validityStartPeriod
+      nextThreadStartValidity, // validityStartThread
+      nextPeriodEndValidity, // validityEndPeriod
+      nextThreadEndValidity, // validityEndThread
       70000000,
       0,
       0,
       ''
   );
-
-  // generateEvent(
-  //   `asyncCreateCollectibles finished (thread = ${curThread}, period = ${curPeriod}))`
-  // );
 }
 
 /**

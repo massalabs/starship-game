@@ -1,12 +1,17 @@
+#![allow(unused)] // silence unused warnings while exploring (to comment out)
+
 use crate::resources::RemoteGamePlayerState;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::math::Vec3Swizzles;
+use bevy::sprite::collide_aabb::collide;
 use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
-use components::{Collectible, Movable, RemotePlayer, SpriteSize, Velocity};
+use components::{Collectible, LocalPlayer, Movable, RemotePlayer, SpriteSize, Velocity};
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use player::PlayerPlugin;
 use resources::{GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType, WinSize};
+use std::collections::HashSet;
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -36,7 +41,7 @@ const PLAYER_SPRITES: [(usize, &str); 2] = [
     (1, "entities/local.v1.png"),
     (2, "entities/remote.v1.png"), // works (planes_7.png/ship_64x64.png)
 ];
-const PLAYER_SIZE: (f32, f32) = (64., 64.);
+const PLAYER_SIZE: (f32, f32) = (128., 128.);
 
 const BACKGROUND_SPRITE: &str = "entities/galaxy.png";
 const BACKGROUND_SIZE: (f32, f32) = (1000., 50.);
@@ -73,6 +78,7 @@ fn main() {
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
     app.add_system(entities_from_blockchain_update_system);
     app.add_system(interpolate_entities_state_system);
+    app.add_system(player_collectibe_collision_system);
     app.run();
 }
 
@@ -294,7 +300,7 @@ fn entities_from_blockchain_update_system(
                                 },
                                 ..Default::default()
                             })
-                            .insert(Collectible)
+                            .insert(Collectible(state.uuid.clone()))
                             .insert(SpriteSize::from(COLLECTIBLE_SIZE))
                             .insert(Movable { auto_despawn: true })
                             .id()
@@ -337,6 +343,56 @@ fn interpolate_entities_state_system(
             // apply bounds to movement
             let extents = Vec3::from((BOUNDS / 2.0, 0.0));
             transform.translation = transform.translation.clamp(-extents, extents);
+        }
+    }
+}
+
+fn player_collectibe_collision_system(
+    mut commands: Commands,
+    mut game_state: ResMut<RemoteGameState>,
+    collectibles_query: Query<(Entity, &Transform, &SpriteSize, &Collectible), With<Collectible>>,
+    players_query: Query<
+        (Entity, &Transform, &SpriteSize),
+        (Or<(With<LocalPlayer>, With<RemotePlayer>)>),
+    >,
+) {
+    let mut despawned_entities: HashSet<Entity> = HashSet::new();
+
+    // iterate through the collectibles
+    for (collectible_entity, collectible_tf, collectible_size, collectible_id) in
+        collectibles_query.iter()
+    {
+        if despawned_entities.contains(&collectible_entity) {
+            continue;
+        }
+
+        let collectible_scale = Vec2::from(collectible_tf.scale.xy());
+
+        // iterate through the players
+        for (player_entity, player_tf, player_size) in players_query.iter() {
+            if despawned_entities.contains(&player_entity)
+                || despawned_entities.contains(&collectible_entity)
+            {
+                continue;
+            }
+            let player_scale = Vec2::from(player_tf.scale.xy());
+
+            // determine if collision
+            let collision = collide(
+                collectible_tf.translation,
+                collectible_size.0 * collectible_scale,
+                player_tf.translation,
+                player_size.0 * player_scale,
+            );
+
+            // perform collision
+            if let Some(_) = collision {
+                // remove the collectible
+                commands.entity(collectible_entity).despawn();
+                despawned_entities.insert(collectible_entity);
+                // remove token from all collection states
+                game_state.remove_collectible(&collectible_id.0);
+            }
         }
     }
 }

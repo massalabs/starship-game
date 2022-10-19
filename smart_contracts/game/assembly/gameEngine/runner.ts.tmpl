@@ -18,26 +18,7 @@ export function main(_: string): i32 {
   call(scAddress, 'setScreenWidth', '1000.0', 0);
   call(scAddress, 'setScreenHeight', '500.0', 0);
   call(scAddress, 'initGeneratedGameTokens', '', 0);
-  call(scAddress, 'setMaxPlayers', '3', 0);
-
-  /*
-  const curThread = currentThread();
-  const curPeriod = currentPeriod();
-  let nextThread = curThread + 1;
-  let nextPeriod = curPeriod;
-  sendMessage(
-      scAddress,
-      'asyncCreateCollectibles',
-      nextPeriod, // validityStartPeriod
-      nextThread, // validityStartThread
-      nextPeriod + 5, // validityEndPeriod
-      nextThread, // validityEndThread
-      70000000,
-      0,
-      0,
-      ''
-  );
-  */
+  call(scAddress, 'setMaxPlayers', '2', 0);
 
   call(scAddress, 'asyncCreateCollectibles', '', 0);
   return 0;
