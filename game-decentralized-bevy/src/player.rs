@@ -5,7 +5,7 @@ use crate::{
     events::PlayerMoved,
     resources::GameTextures,
     wasm::LOCAL_PLAYER_POSITION,
-    BOUNDS, LINEAR_MOVEMENT_SPEED, LINEAR_ROTATION_SPEED, PLAYER_SIZE, SCREEN_HEIGHT, TIME_STEP,
+    BOUNDS, LINEAR_MOVEMENT_SPEED, LINEAR_ROTATION_SPEED, PLAYER_SIZE, TIME_STEP,
 };
 
 pub struct PlayerPlugin;
@@ -32,15 +32,16 @@ fn player_spawn_system(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
 ) {
+    // get texture for local player
     let player_texture = game_textures.player.get(&1).cloned().unwrap();
 
     commands
         .spawn_bundle(SpriteBundle {
             texture: player_texture,
             transform: Transform {
-                translation: Vec3::new(0., SCREEN_HEIGHT / 2., 0.),
+                translation: Vec3::new(0., 0., 0.),
                 rotation: Quat::from_rotation_z(0.),
-                scale: Vec3::new(0.15, 0.15, -1.),
+                scale: Vec3::new(0.5, 0.5, -1.),
                 ..Default::default()
             },
             ..Default::default()

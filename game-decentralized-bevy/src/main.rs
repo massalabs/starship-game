@@ -32,10 +32,9 @@ const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 const LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
 const LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
 
-const PLAYER_SPRITES: [(usize, &str); 3] = [
-    (1, "entities/planes_1.png"),
-    (2, "entities/planes_2.png"),
-    (3, "entities/planes_3.png"),
+const PLAYER_SPRITES: [(usize, &str); 2] = [
+    (1, "entities/local.v1.png"),
+    (2, "entities/remote.v1.png"), // works (planes_7.png/ship_64x64.png)
 ];
 const PLAYER_SIZE: (f32, f32) = (64., 64.);
 
@@ -236,15 +235,8 @@ fn entities_from_blockchain_update_system(
                         .add_new_player(&player_added.uuid, player_added.clone())
                         .is_none()
                     {
-                        let player_texture_index = std::cmp::max(
-                            game_state.remote_players.len() + 1,
-                            PLAYER_SPRITES.len(),
-                        );
-                        let player_texture = game_textures
-                            .player
-                            .get(&player_texture_index)
-                            .cloned()
-                            .unwrap();
+                        // get texture for remote player
+                        let player_texture = game_textures.player.get(&1).cloned().unwrap();
 
                         let spawned_remote_player = commands
                             .spawn_bundle(SpriteBundle {
@@ -252,7 +244,7 @@ fn entities_from_blockchain_update_system(
                                 transform: Transform {
                                     translation: player_added.position,
                                     rotation: player_added.rotation,
-                                    scale: Vec3::new(0.15, 0.15, -1.),
+                                    scale: Vec3::new(0.5, 0.5, -1.),
                                     ..Default::default()
                                 },
                                 ..Default::default()
