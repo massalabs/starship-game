@@ -322,14 +322,18 @@ export function registerPlayer(args: string): void {
   // mark player as registered
   registeredPlayers.set(addr.toByteString(), true);
 
+  // get screen width/height
+  const screenHeight = Storage.get(SCREEN_HEIGHT_KEY);
+  const screenHeightF32: f64 = parseFloat(screenHeight);
+
   // set storage
   const playerEntity: PlayerEntity = {
     uuid: _generateUuid(),
     address: addr.toByteString(),
     name: playerRegisterRequest.name,
     x: 0.0,
-    y: 0.0,
-    rot: 0.0,
+    y: screenHeightF32/2.0 as f32,
+    rot: -1.0,
     w: 0.0,
     cbox: PLAYER_BOUNDING_BOX,
   } as PlayerEntity;
@@ -443,7 +447,7 @@ export function setAbsCoors(_args: string): void {
   // _checkTokenCollectedAsync(serializedPlayerData);
 
   // send event
-  _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
+  // _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
 }
 
 /**
@@ -726,10 +730,10 @@ export function asyncCreateCollectibles(_args: string): void {
   }
 
   // emit wakeup message
-  const nextThreadStartValidity = curThread + 1;
-  const nextPeriodStartValidity = curPeriod + 5;
-  const nextThreadEndValidity = curThread + 1;
-  const nextPeriodEndValidity = curPeriod + 10;
+  const nextThreadStartValidity = curThread;
+  const nextPeriodStartValidity = curPeriod + 2;
+  const nextThreadEndValidity = curThread;
+  const nextPeriodEndValidity = curPeriod + 5;
 
   // sc address
   const curAddr = Context.callee();

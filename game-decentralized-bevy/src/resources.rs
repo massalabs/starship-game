@@ -1,5 +1,6 @@
 use bevy::{prelude::*, utils::HashMap};
 use std::collections::BTreeMap;
+use wasm_bindgen::JsValue;
 
 #[derive(Debug, Clone)]
 pub struct GameTextures {
@@ -15,6 +16,20 @@ pub struct WinSize {
 }
 
 #[derive(Clone, Debug)]
+pub enum EntityType {
+    Local,
+    Remote,
+}
+
+pub fn map_type(r#type: &JsValue) -> EntityType {
+    return match r#type.as_string().unwrap().as_str() {
+        "local" => EntityType::Local,
+        "remote" => EntityType::Remote,
+        _ => EntityType::Remote,
+    };
+}
+
+#[derive(Clone, Debug)]
 pub struct RemoteGamePlayerState {
     pub uuid: String,
     pub address: String,
@@ -23,6 +38,7 @@ pub struct RemoteGamePlayerState {
     pub position: Vec3,
     /// rotation speed in radians per second
     pub rotation: Quat,
+    pub r#type: EntityType,
 }
 
 #[derive(Clone, Debug)]
@@ -51,7 +67,7 @@ pub struct RemoteGameState {
 }
 
 impl RemoteGameState {
-    pub fn add_new_player(
+    pub fn add_new_remote_player(
         &mut self,
         uuid: &str,
         player: RemoteGamePlayerState,
@@ -59,7 +75,7 @@ impl RemoteGameState {
         self.remote_players.insert(uuid.to_owned(), player)
     }
 
-    pub fn add_new_player_entity(
+    pub fn add_new_remote_player_entity(
         &mut self,
         uuid: &str,
         entity: Entity,
@@ -67,14 +83,14 @@ impl RemoteGameState {
         self.entity_players.insert(uuid.to_owned(), entity)
     }
 
-    pub fn get_player_entity(
+    pub fn get_remote_player_entity(
         &self,
         uuid: &str,
     ) -> Option<&Entity> {
         self.entity_players.get(uuid)
     }
 
-    pub fn remove_player(
+    pub fn remove_remote_player(
         &mut self,
         uuid: &str,
     ) {
@@ -82,7 +98,7 @@ impl RemoteGameState {
         self.entity_players.remove(uuid);
     }
 
-    pub fn clear_players(&mut self) {
+    pub fn clear_remote_players(&mut self) {
         self.remote_players.clear();
     }
 

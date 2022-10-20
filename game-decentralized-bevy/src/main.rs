@@ -8,9 +8,12 @@ use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 use components::{Collectible, LocalPlayer, Movable, RemotePlayer, SpriteSize, Velocity};
+use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
-use player::PlayerPlugin;
-use resources::{GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType, WinSize};
+use resources::{
+    map_type, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType,
+    WinSize,
+};
 use std::collections::HashSet;
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
@@ -18,7 +21,6 @@ use wasm_bindgen::{JsCast, JsValue};
 pub mod collectible;
 pub mod components;
 pub mod events;
-pub mod player;
 pub mod resources;
 pub mod utils;
 pub mod wasm;
@@ -37,10 +39,8 @@ const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 const LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
 const LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
 
-const PLAYER_SPRITES: [(usize, &str); 2] = [
-    (1, "entities/local.v1.png"),
-    (2, "entities/remote.v1.png"), // works (planes_7.png/ship_64x64.png)
-];
+const PLAYER_SPRITES: [(usize, &str); 2] =
+    [(1, "entities/local.v1.png"), (2, "entities/remote.v1.png")];
 const PLAYER_SIZE: (f32, f32) = (128., 128.);
 
 const BACKGROUND_SPRITE: &str = "entities/galaxy.png";
@@ -71,14 +71,17 @@ fn main() {
         ..Default::default()
     });
     app.add_plugins(DefaultPlugins);
+    app.add_event::<PlayerMoved>();
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
-    app.add_plugin(PlayerPlugin);
+    //app.add_plugin(PlayerPlugin);
     //app.add_startup_system(setup_system);
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
+    app.add_system(local_player_movement_system);
+    app.add_system(on_local_player_moved_system);
     app.add_system(entities_from_blockchain_update_system);
-    app.add_system(interpolate_entities_state_system);
-    app.add_system(player_collectibe_collision_system);
+    app.add_system(interpolate_blockchain_entities_state_system);
+    app.add_system(player_collectible_collision_system);
     app.run();
 }
 
@@ -144,6 +147,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
     let y = get_value_for_key("y", &js_obj).expect("Some y to be present");
     let rot = get_value_for_key("rot", &js_obj).expect("Some rot to be present");
     let w = get_value_for_key("w", &js_obj).expect("Some w to be present");
+    let r#type = get_value_for_key("type", &js_obj).expect("Some type to be present");
 
     let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) {
         //info!("PLAYER_ADDED");
@@ -162,6 +166,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 rot.as_f64().unwrap() as f32,
                 w.as_f64().unwrap() as f32,
             ]),
+            r#type: map_type(&r#type),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_MOVED)) {
         //info!("PLAYER_MOVED");
@@ -180,6 +185,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 rot.as_f64().unwrap() as f32,
                 w.as_f64().unwrap() as f32,
             ]),
+            r#type: map_type(&r#type),
         }))
     } else if operation.eq(&JsValue::from(PLAYER_REMOVED)) {
         //info!("PLAYER_REMOVED");
@@ -193,6 +199,7 @@ fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<Remote
                 0.0f32,
             ),
             rotation: Quat::NAN,
+            r#type: map_type(&r#type),
         }))
     } else if operation.eq(&JsValue::from(TOKEN_COLLECTED)) {
         //info!("TOKEN_COLLECTED");
@@ -236,45 +243,79 @@ fn entities_from_blockchain_update_system(
             let mapped_update = map_js_update_to_rust_entity_state(entity);
             match mapped_update {
                 Some(RemoteStateType::PlayerAdded(player_added)) => {
-                    // add player to state and spawn new entity only if new player uuid
-                    if game_state
-                        .add_new_player(&player_added.uuid, player_added.clone())
-                        .is_none()
-                    {
-                        // get texture for remote player
-                        let player_texture = game_textures.player.get(&1).cloned().unwrap();
+                    match player_added.r#type {
+                        EntityType::Local => {
+                            // get texture for local player
+                            let player_texture = game_textures.player.get(&1).cloned().unwrap();
 
-                        let spawned_remote_player = commands
-                            .spawn_bundle(SpriteBundle {
-                                texture: player_texture,
-                                transform: Transform {
-                                    translation: player_added.position,
-                                    rotation: player_added.rotation,
-                                    scale: Vec3::new(0.5, 0.5, -1.),
+                            commands
+                                .spawn_bundle(SpriteBundle {
+                                    texture: player_texture,
+                                    transform: Transform {
+                                        translation: player_added.position,
+                                        rotation: player_added.rotation,
+                                        scale: Vec3::new(0.5, 0.5, -1.),
+                                        ..Default::default()
+                                    },
                                     ..Default::default()
-                                },
-                                ..Default::default()
-                            })
-                            .insert(RemotePlayer(player_added.uuid.clone()))
-                            .insert(SpriteSize::from(PLAYER_SIZE))
-                            .insert(Movable { auto_despawn: true })
-                            .insert(Velocity {
-                                linear: LINEAR_MOVEMENT_SPEED,
-                                rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
-                            })
-                            .id();
+                                })
+                                .insert(LocalPlayer)
+                                .insert(SpriteSize::from(PLAYER_SIZE))
+                                .insert(Movable {
+                                    auto_despawn: false,
+                                })
+                                .insert(Velocity {
+                                    linear: LINEAR_MOVEMENT_SPEED,
+                                    rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
+                                });
+                        }
+                        EntityType::Remote => {
+                            // add player to state and spawn new entity only if new player uuid
+                            if game_state
+                                .add_new_remote_player(&player_added.uuid, player_added.clone())
+                                .is_none()
+                            {
+                                // get texture for remote player
+                                let player_texture = game_textures.player.get(&1).cloned().unwrap();
 
-                        game_state.add_new_player_entity(&player_added.uuid, spawned_remote_player);
+                                let spawned_remote_player = commands
+                                    .spawn_bundle(SpriteBundle {
+                                        texture: player_texture,
+                                        transform: Transform {
+                                            translation: player_added.position,
+                                            rotation: player_added.rotation,
+                                            scale: Vec3::new(0.5, 0.5, -1.),
+                                            ..Default::default()
+                                        },
+                                        ..Default::default()
+                                    })
+                                    .insert(RemotePlayer(player_added.uuid.clone()))
+                                    .insert(SpriteSize::from(PLAYER_SIZE))
+                                    .insert(Movable { auto_despawn: true })
+                                    .insert(Velocity {
+                                        linear: LINEAR_MOVEMENT_SPEED,
+                                        rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
+                                    })
+                                    .id();
+
+                                game_state.add_new_remote_player_entity(
+                                    &player_added.uuid,
+                                    spawned_remote_player,
+                                );
+                            }
+                        }
                     }
                 }
                 Some(RemoteStateType::PlayerRemoved(player_to_remove)) => {
                     // despawn entity id
-                    if let Some(entity_id) = game_state.get_player_entity(&player_to_remove.uuid) {
+                    if let Some(entity_id) =
+                        game_state.get_remote_player_entity(&player_to_remove.uuid)
+                    {
                         // despawn the remote player entity
                         commands.entity(*entity_id).despawn();
                     }
                     // remove player from all collection states
-                    game_state.remove_player(&player_to_remove.uuid);
+                    game_state.remove_remote_player(&player_to_remove.uuid);
                 }
                 Some(RemoteStateType::PlayerMoved(player_moved)) => {
                     // check to see if the player has an entity id already (is registered). If not, skip update
@@ -329,7 +370,7 @@ fn entities_from_blockchain_update_system(
     });
 }
 
-fn interpolate_entities_state_system(
+fn interpolate_blockchain_entities_state_system(
     mut commands: Commands,
     mut game_state: ResMut<RemoteGameState>,
     mut query: Query<(Entity, &mut Transform, &Velocity, &RemotePlayer), With<RemotePlayer>>,
@@ -347,7 +388,7 @@ fn interpolate_entities_state_system(
     }
 }
 
-fn player_collectibe_collision_system(
+fn player_collectible_collision_system(
     mut commands: Commands,
     mut game_state: ResMut<RemoteGameState>,
     collectibles_query: Query<(Entity, &Transform, &SpriteSize, &Collectible), With<Collectible>>,
@@ -394,5 +435,52 @@ fn player_collectibe_collision_system(
                 game_state.remove_collectible(&collectible_id.0);
             }
         }
+    }
+}
+
+fn local_player_movement_system(
+    time: Res<Time>,
+    mut player_moved_events: EventWriter<PlayerMoved>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(&Velocity, &mut Transform), With<LocalPlayer>>,
+) {
+    for (velocity, mut transform) in query.iter_mut() {
+        // ship rotation
+        let mut rotation_factor = 0.0;
+
+        if keyboard_input.pressed(KeyCode::Left) {
+            rotation_factor += 1.0;
+        }
+
+        if keyboard_input.pressed(KeyCode::Right) {
+            rotation_factor -= 1.0;
+        }
+
+        let rotation_delta =
+            Quat::from_rotation_z(rotation_factor * velocity.rotational * TIME_STEP);
+        transform.rotation *= rotation_delta;
+
+        let movement_direction = transform.rotation * Vec3::Y;
+        transform.translation += movement_direction * velocity.linear * TIME_STEP;
+
+        // limit the movement within the screen
+        let extents = Vec3::from((BOUNDS / 2.0, 0.0));
+        transform.translation = transform.translation.clamp(-extents, extents);
+
+        // send message about player translation
+        player_moved_events.send(PlayerMoved {
+            pos: transform.translation,
+            rot: transform.rotation,
+        });
+    }
+}
+
+fn on_local_player_moved_system(mut events: EventReader<PlayerMoved>) {
+    for movement_event in events.iter() {
+        // on each player move push the new position to js over the wasm-bounded thread
+        LOCAL_PLAYER_POSITION.with(|pos| {
+            pos.borrow_mut()
+                .from_game_vector(movement_event.pos, movement_event.rot);
+        });
     }
 }

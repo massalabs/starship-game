@@ -12,7 +12,7 @@ import MenuItem from '@mui/material/MenuItem';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./PlayerEntity";
-import { getPlayerPos, registerPlayer, isPlayerRegistered, getPlayerBalance, getPlayerTokens } from "./gameFunctions";
+import { registerPlayer, isPlayerRegistered, getPlayerPos } from "./gameFunctions";
 import { generateThreadAddressesMap, getProviderUrl, networks, networkValues } from "./utils";
 import { Navigate } from "react-router-dom";
 
@@ -41,9 +41,6 @@ export interface IPropState {
   networkName: string;
   isPlayerRegistered: boolean;
   threadAddressesMap: Object;
-  playerOnchainState: IPlayerOnchainEntity | undefined;
-  playerBalance: number;
-  playerTokens: number;
 } 
 
 export interface IState extends IPropState {
@@ -65,9 +62,6 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       showModal: true,
       isPlayerRegistered: false,
       threadAddressesMap: new Map<number, IAccount>(),
-      playerOnchainState: undefined,
-      playerBalance: 0,
-      playerTokens: 0,
       isRegisteringPlayer: false,
     };
 
@@ -151,12 +145,11 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       hasPlayerRegistered = await isPlayerRegistered(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
     } catch (ex) {
       console.error("Error getting is player registered...", ex);
+      this.setState({ isRegisteringPlayer: false });
     }
 
     // register player if necessary
     let playerEntity: IPlayerOnchainEntity|undefined = undefined;
-    let playerBalance: number = 0;
-    let playerTokens: number = 0;
     if (!hasPlayerRegistered) {
       try {
         playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress);
@@ -187,16 +180,6 @@ export default class RegisterPlayer extends Component<IProps, IState> {
           type: "error"
         });
       }
-      try {
-        playerBalance = await getPlayerBalance(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
-      } catch (ex) {
-        console.error("Error getting player balance...", ex);
-      }
-      try {
-        playerTokens = await getPlayerTokens(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
-      } catch (ex) {
-        console.error("Error getting player tokens...", ex);
-      }
     }
 
     // update react state
@@ -205,10 +188,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
         return { ...prevState,
               showModal: false,
               isPlayerRegistered: true,
-              playerBalance,
-              playerTokens,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
-              playerOnchainState: playerEntity,
               isRegisteringPlayer: false
         };
       });

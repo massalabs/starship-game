@@ -91,6 +91,7 @@ extern "C" {
         y: f32,
         rot: f32,
         w: f32,
+        r#type: String,
     ) -> GameEntityUpdate;
 
     // --------OPERATION--------------- //

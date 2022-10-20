@@ -10,10 +10,10 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "./PlayerEntity";
-import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerCandidatePositionFromStore, getPlayerPos, setPlayerPositionOnchain } from "./gameFunctions";
+import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerPositionOnchain } from "./gameFunctions";
 import { IGameEvent } from "./GameEvent";
 import { getProviderUrl, PollTimeout, wait } from "./utils";
-import { GameEntityUpdate } from "./GameEntity";
+import { ENTITY_TYPE, GameEntityUpdate } from "./GameEntity";
 import { ITokenOnchainEntity } from "./TokenEntity";
 import {IPropState} from "./RegisterPlayer";
 import { Link } from "react-router-dom";
@@ -79,10 +79,10 @@ class WasmDappExample extends React.Component<IProps, IState> {
       networkName: propState.networkName,
       threadAddressesMap: new Map<string, IAccount>(Object.entries(propState.threadAddressesMap)),
       isPlayerRegistered: propState.isPlayerRegistered,
-      playerOnchainState: propState.playerOnchainState,
+      playerOnchainState: null,
       playerGameState: null,
-      playerBalance: propState.playerBalance,
-      playerTokens: propState.playerTokens,
+      playerBalance: 0,
+      playerTokens: 0,
       playerAddress: propState.playerAddress,
       playerName: propState.playerName,
       playerSecretKey: propState.playerSecretKey,
@@ -119,13 +119,62 @@ class WasmDappExample extends React.Component<IProps, IState> {
       } catch (ex) {
         if (!(ex as Error).message.includes("This isn't actually an error!")) {
           console.error(`Error loading wasm`, (ex as Error).message);
+          toast(`Error loading wasm. Error = ${(ex as Error).message}!`,{
+            className: "toast",
+            type: "error"
+          });
           isError = true;
+          return;
         }
       }
       if (!isError) {
         toast(`Wasm Loaded!`,{
           className: "toast"
         });
+      }
+
+      // get player pos and balances
+      let playerEntity: IPlayerOnchainEntity|undefined = undefined;
+      let playerBalance: number = 0;
+      let playerTokens: number = 0;
+      try {
+        playerEntity = await getPlayerPos(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+        toast(`Player Already Registered!`,{
+          className: "toast",
+          type: "success"
+        });
+      } catch (ex) {
+        console.error("Error registering player...", ex);
+        toast(`Error registering player ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        })
+      };
+
+      try {
+        playerBalance = await getPlayerBalance(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting player balance...", ex);
+      }
+      try {
+        playerTokens = await getPlayerTokens(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting player tokens...", ex);
+      }
+
+      // render the local player
+      if (playerEntity) {
+        const localPlayerGameEntity = new GameEntityUpdate(PLAYER_ADDED,
+          playerEntity.uuid,
+          playerEntity.address,
+          playerEntity.name,
+          playerEntity.x,
+          playerEntity.y,
+          playerEntity.rot,
+          playerEntity.w,
+          ENTITY_TYPE.LOCAL);
+
+          game.push_game_entity_updates([localPlayerGameEntity]);
       }
 
       // render in game client initial tokens state
@@ -136,7 +185,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
         console.error("Error getting tokens initial state...", ex);
       }
       const tokensGameUpdate = tokensInitialState.map(tokenEntity => {
-        const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0, 0.0);
+        const gameEntity = new GameEntityUpdate(TOKEN_ADDED,
+          tokenEntity.uuid,
+          "N/A",
+          "N/A",
+          tokenEntity.x,
+          tokenEntity.y,
+          0.0,
+          0.0,
+          ENTITY_TYPE.REMOTE);
         return gameEntity;
       })
       if (tokensGameUpdate.length > 0) { game.push_game_entity_updates(tokensGameUpdate); }
@@ -174,7 +231,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
 
       // render remote players states
       const remotePlayersStatesUpdate = remotePlayersStates.map(remotePlayerState => {
-        const gameEntity = new GameEntityUpdate(PLAYER_ADDED, remotePlayerState.uuid, remotePlayerState.address, remotePlayerState.name, remotePlayerState.x, remotePlayerState.y, remotePlayerState.rot, remotePlayerState.w);
+        const gameEntity = new GameEntityUpdate(PLAYER_ADDED,
+          remotePlayerState.uuid,
+          remotePlayerState.address,
+          remotePlayerState.name,
+          remotePlayerState.x,
+          remotePlayerState.y,
+          remotePlayerState.rot,
+          remotePlayerState.w,
+          ENTITY_TYPE.REMOTE);
         return gameEntity;
       })
       game.push_game_entity_updates(remotePlayersStatesUpdate);
@@ -194,10 +259,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
               web3Client,
               activePlayers,
               maxPlayers,
+              playerBalance,
+              playerTokens,
+              playerOnchainState: playerEntity,
               playerGameState: {
-                x: this.state.playerOnchainState?.x,
-                y: this.state.playerOnchainState?.y,
-                rot: this.state.playerOnchainState?.rot
+                x: playerEntity?.x,
+                y: playerEntity?.y,
+                rot: playerEntity?.rot,
+                w: playerEntity?.w
               } as IPlayerGameEntity
         };
       }, () => {
@@ -285,7 +354,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player added ", playerEntity);
               // update game engine state
-              const gameEntity = new GameEntityUpdate(PLAYER_ADDED, playerEntity.uuid, playerEntity.address, playerEntity.name, playerEntity.x, playerEntity.y, playerEntity.rot, playerEntity.w);
+              const gameEntity = new GameEntityUpdate(PLAYER_ADDED,
+                playerEntity.uuid,
+                playerEntity.address,
+                playerEntity.name,
+                playerEntity.x,
+                playerEntity.y,
+                playerEntity.rot,
+                playerEntity.w,
+                ENTITY_TYPE.REMOTE);
               game.push_game_entity_updates([gameEntity]);
               // start polling player position
               if (!this.remoteBlockchainPositionTimeouts.has(playerEntity.address)) {
@@ -303,7 +380,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
               const playerEntity: IPlayerOnchainEntity = JSON.parse(eventData as string);
               console.log("Player removed ", playerEntity);
               // update game engine state
-              const gameEntity = new GameEntityUpdate(PLAYER_REMOVED, playerEntity.uuid, playerEntity.address, playerEntity.name, playerEntity.x, playerEntity.y, playerEntity.rot, playerEntity.w);
+              const gameEntity = new GameEntityUpdate(PLAYER_REMOVED,
+                playerEntity.uuid,
+                playerEntity.address,
+                playerEntity.name,
+                playerEntity.x,
+                playerEntity.y,
+                playerEntity.rot,
+                playerEntity.w,
+                ENTITY_TYPE.REMOTE);
               game.push_game_entity_updates([gameEntity]);
               toast(`Player ${playerEntity.name} disconnected!`,{
                 className: "toast"
@@ -319,13 +404,29 @@ class WasmDappExample extends React.Component<IProps, IState> {
             }
             case TOKEN_ADDED: {
               const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
-              const gameEntity = new GameEntityUpdate(TOKEN_ADDED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0, 0.0);
+              const gameEntity = new GameEntityUpdate(TOKEN_ADDED,
+                tokenEntity.uuid,
+                "N/A",
+                "N/A",
+                tokenEntity.x,
+                tokenEntity.y,
+                0.0,
+                0.0,
+                ENTITY_TYPE.REMOTE);
               game.push_game_entity_updates([gameEntity]);
               break;
             }
             case TOKEN_REMOVED: {
               const tokenEntity: ITokenOnchainEntity = JSON.parse(eventData as string);
-              const gameEntity = new GameEntityUpdate(TOKEN_REMOVED, tokenEntity.uuid, "N/A", "N/A", tokenEntity.x, tokenEntity.y, 0.0, 0.0);
+              const gameEntity = new GameEntityUpdate(TOKEN_REMOVED,
+                tokenEntity.uuid,
+                "N/A",
+                "N/A",
+                tokenEntity.x,
+                tokenEntity.y,
+                0.0,
+                0.0,
+                ENTITY_TYPE.REMOTE);
               game.push_game_entity_updates([gameEntity]);
               break;
             }
@@ -390,7 +491,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
     }
 
     if (remotePlayerPos) {
-      const gameEntity = new GameEntityUpdate(PLAYER_MOVED, remotePlayerPos.uuid, remotePlayerPos.address, remotePlayerPos.name, remotePlayerPos.x, remotePlayerPos.y, remotePlayerPos.rot, remotePlayerPos.w);
+      const gameEntity = new GameEntityUpdate(PLAYER_MOVED,
+        remotePlayerPos.uuid,
+        remotePlayerPos.address,
+        remotePlayerPos.name,
+        remotePlayerPos.x,
+        remotePlayerPos.y,
+        remotePlayerPos.rot,
+        remotePlayerPos.w,
+        ENTITY_TYPE.REMOTE);
       game.push_game_entity_updates([gameEntity]);
     }
 

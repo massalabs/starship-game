@@ -1,3 +1,8 @@
+export const ENTITY_TYPE = {
+    LOCAL: "local",
+    REMOTE: "remote"
+};
+
 export class GameEntityUpdate {
     public operation: string;
     public uuid: string;
@@ -7,8 +12,9 @@ export class GameEntityUpdate {
     public y: number;
     public rot: number;
     public w: number;
+    public type: string;
   
-    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number, w: number) {
+    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number, w: number, type: string) {
       this.operation = operation;
       this.uuid = uuid;
       this.address = address;
@@ -17,6 +23,7 @@ export class GameEntityUpdate {
       this.y = y;
       this.rot = rot;
       this.w = w;
+      this.type = type;
     }
     // ------------------------------------
     set set_operation(operation: string) {
