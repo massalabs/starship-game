@@ -74,8 +74,6 @@ fn main() {
     app.add_event::<PlayerMoved>();
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
-    //app.add_plugin(PlayerPlugin);
-    //app.add_startup_system(setup_system);
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
     app.add_system(local_player_movement_system);
     app.add_system(on_local_player_moved_system);
