@@ -1,6 +1,6 @@
 import {Amount, ByteArray} from '@massalabs/as/assembly';
 import {
-  fileToBase64, call, createSC, Address, print, generateEvent, Context,
+  fileToBase64, call, createSC, Address, print, generateEvent, Context
 } from '@massalabs/massa-as-sdk/assembly';
 
 /**

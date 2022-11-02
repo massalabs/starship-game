@@ -317,8 +317,10 @@ class WasmDappExample extends React.Component<IProps, IState> {
         let gameEvent: IGameEvent|undefined = undefined;
         try {
           gameEvent = JSON.parse(event.data) as IGameEvent;
+          console.log(gameEvent);
         } catch (err) {
-          console.error("Error parsing game event", event.data);
+          console.error("Ignoring game event...", event);
+          continue; // not a proper game event
         }
         if (gameEvent && gameEvent.data) {
           const eventMessageData = gameEvent.data.split("=");
@@ -633,14 +635,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-tokens-collected"
                         label="Tokens Collected"
-                        value={this.state.playerOnchainState ? this.state.playerTokens : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerTokens.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
                     <TextField
                         id="txt-field-tokens-balance"
                         label="Tokens Balance"
-                        value={this.state.playerOnchainState ? this.state.playerBalance : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerBalance.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
@@ -649,21 +651,21 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-game-x"
                         label="Game X Pos"
-                        value={this.state.playerGameState ? this.state.playerGameState.x : "N/A"}
+                        value={this.state.playerGameState ? this.state.playerGameState.x.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
                     <TextField
                         id="txt-field-game-y"
                         label="Game Y Pos"
-                        value={this.state.playerGameState ? this.state.playerGameState.y : "N/A"}
+                        value={this.state.playerGameState ? this.state.playerGameState.y.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
                     <TextField
                         id="txt-field-game-rot"
                         label="Game Rot Pos"
-                        value={this.state.playerGameState ? this.state.playerGameState.rot : "N/A"}
+                        value={this.state.playerGameState ? this.state.playerGameState.rot.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
@@ -672,21 +674,21 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-massa-x"
                         label="Massa X Pos"
-                        value={this.state.playerOnchainState ? this.state.playerOnchainState.x : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.x.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
                     <TextField
                         id="txt-field-massa-y"
                         label="Massa Y Pos"
-                        value={this.state.playerOnchainState ? this.state.playerOnchainState.y : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.y.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
                     <TextField
                         id="txt-field-massa-rot"
                         label="Massa Rot Pos"
-                        value={this.state.playerOnchainState ? this.state.playerOnchainState.rot : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.rot.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />

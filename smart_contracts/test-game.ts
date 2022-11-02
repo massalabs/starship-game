@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12pJzxFHpPbdNeQ65hq8tR4RU5B272YFsjgQVEeLGgLYiK7JU8j";
+        const scAddress = "A15Ji8Ky9fwwXbJGfgYCbwp1edNkyeuaYdmJUVtfXPmgxwgMTRD";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -291,7 +291,7 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get player balance directly from token
-        /*
+        
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -304,7 +304,8 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("PLAYER BALANCE ", readTxId[0].output_events[0].data);
-        */
+        
+        
 
         /*
         const readTxId = await web3Client.smartContracts().readSmartContract({
@@ -344,6 +345,42 @@ import { IDatastoreEntryInput,
         console.log(`Reading a smart state entry...`);
         const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: `registered_players_states_key::${playerAddress}` } as IDatastoreEntryInput]);
         console.log(`Got smart contract storage data for key: ${(JSON.stringify(scStorageData, null, 4))}`);
+        */
+
+
+        // =================MINT TOKENS==========================================
+
+        // get player balance directly from token
+        /*
+        const callTxId = await web3Client.smartContracts().callSmartContract({
+            fee: 0,
+            gasPrice: 0,
+            maxGas: 200000,
+            parallelCoins: 0,
+            sequentialCoins: 0,
+            targetAddress: scAddress,
+            functionName: "setAbsCoors",
+            parameter: `{"uuid":"uuid-9016063961940463616","address":"A12thhcEbzPJHw5vyKyJ3Kx3Y6EsvYbeopg6Vg9V8u52mbo2PVqG","x":-200.0,"y":200.0,"rot":90.0,"cbox":64.0,"tokensCollected":0.0}`,
+        } as ICallData);
+        const callScOperationId = callTxId[0];
+        console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
+        */
+
+        // ============================== BALANCEOF =============================== //
+        /*
+        console.log(`Reading a smart contract state...`);
+        const tokenAddress = "A1kUp69iNXuioUejN7tcA2Tgg7wUyZTaED12v3iTR8xtrrac266";
+        const addressForBalance = "A12ZD25Mn281yRNHvq54Cy4htmvj1mT2Syp2w5jgwxiHLRvq1zsz";
+        const readTxId = await web3Client.smartContracts().readSmartContract({
+            fee: 0,
+            maxGas: 200000,
+            simulatedGasPrice: 0,
+            targetAddress: tokenAddress,
+            targetFunction: "balanceOf",
+            parameter: addressForBalance,
+            callerAddress: addressForBalance
+        } as IReadData);
+        console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         */
 
     } catch (ex) {

@@ -14,7 +14,7 @@ import {
   collections,
   env,
 } from '@massalabs/massa-as-sdk/assembly';
-import {Amount} from '@massalabs/as/assembly';
+import {Amount, Currency} from '@massalabs/as/assembly';
 import {Rectangle, _isIntersection} from './utils/rectangle';
 import {PlayerEntity} from './entities/playerEntity';
 import {CollectibleEntity} from './entities/collectibleEntity';
@@ -617,7 +617,7 @@ export function _checkTokenCollected(args: string): void {
       // transfer the token to the player
       _playerCollectibleClaim(
           new Address(playerPos.address),
-          new Amount(<u64>collectibleEntity.value)
+          <u64>collectibleEntity.value
       );
 
       // increase player collected tokens count
@@ -652,14 +652,19 @@ export function _checkTokenCollected(args: string): void {
  */
 function _playerCollectibleClaim(
     playerAddress: Address,
-    collectibleValue: Amount
+    collectibleValue: u64
 ): void {
-  // transfer token to player
+  // get token address
   const tokenAddress = Address.fromByteString(Storage.get(TOKEN_ADDRESS_KEY));
+
   // get collectible impl wrapper
   const collToken = new token.TokenWrapper(tokenAddress);
+
+  // amount to send
+  const amountToSend = new Amount(collectibleValue, new Currency(collToken.name(), 2, true)); // TODO: use decimals here!
+
   // token transfers X amount to player
-  collToken.mint(playerAddress, collectibleValue);
+  collToken.transfer(playerAddress, amountToSend);
 }
 
 /**
