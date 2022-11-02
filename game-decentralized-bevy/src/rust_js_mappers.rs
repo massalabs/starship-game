@@ -2,7 +2,9 @@ use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use wasm_bindgen::{JsCast, JsValue};
 
 use crate::errors::ClientError;
-use crate::events::{PLAYER_ADDED, PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_REMOVED, TOKEN_COLLECTED};
+use crate::events::{
+    PLAYER_ADDED, PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
+};
 use crate::resources::{
     CollectedEntity, EntityType, RemoteCollectibleState, RemoteGamePlayerState, RemoteStateType,
 };
@@ -127,7 +129,7 @@ pub fn map_js_update_to_rust_entity_state(
                 PLAYER_REMOVED => Ok(Some(RemoteStateType::PlayerRemoved(player_state))),
                 _ => Err(ClientError::UnknownOperationReceived),
             }
-        },
+        }
         TOKEN_ADDED | TOKEN_REMOVED => {
             info!("TOKEN ACTION {:?} ", operation.as_str());
             let token_state = RemoteCollectibleState {
@@ -148,23 +150,22 @@ pub fn map_js_update_to_rust_entity_state(
                 TOKEN_REMOVED => Ok(Some(RemoteStateType::TokenRemoved(token_state))),
                 _ => Err(ClientError::UnknownOperationReceived),
             }
-        },
+        }
         TOKEN_COLLECTED => {
-
             let res = Ok(Some(RemoteStateType::TokenCollected(CollectedEntity {
-            uuid: get_key_value_from_obj::<String>("uuid", &js_obj)
-                .ok_or(ClientError::UnparsableKeyValueJsValue("uuid".to_owned()))?,
-            player_uuid: get_key_value_from_obj::<String>("playerUuid", &js_obj).ok_or(
-                ClientError::UnparsableKeyValueJsValue("playerUuid".to_owned()),
-            )?,
-            value: get_key_value_from_obj::<f64>("value", &js_obj)
-                .ok_or(ClientError::UnparsableKeyValueJsValue("value".to_owned()))?,
-            time: get_key_value_from_obj::<f64>("time", &js_obj)
-                .ok_or(ClientError::UnparsableKeyValueJsValue("time".to_owned()))?,
+                uuid: get_key_value_from_obj::<String>("uuid", &js_obj)
+                    .ok_or(ClientError::UnparsableKeyValueJsValue("uuid".to_owned()))?,
+                player_uuid: get_key_value_from_obj::<String>("playerUuid", &js_obj).ok_or(
+                    ClientError::UnparsableKeyValueJsValue("playerUuid".to_owned()),
+                )?,
+                value: get_key_value_from_obj::<f64>("value", &js_obj)
+                    .ok_or(ClientError::UnparsableKeyValueJsValue("value".to_owned()))?,
+                time: get_key_value_from_obj::<f64>("time", &js_obj)
+                    .ok_or(ClientError::UnparsableKeyValueJsValue("time".to_owned()))?,
             })));
             info!("TOKEN COLLECTED {:?} ", res);
             res
-        },
+        }
         _ => return Ok(None),
     }
 }

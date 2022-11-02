@@ -319,7 +319,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
           gameEvent = JSON.parse(event.data) as IGameEvent;
           console.log(gameEvent);
         } catch (err) {
-          console.error("Ignoring game event...", event);
+          console.warn("Ignoring game event...", event);
           continue; // not a proper game event
         }
         if (gameEvent && gameEvent.data) {

@@ -1,5 +1,6 @@
 use bevy::math::Vec2;
-use bevy::prelude::Component;
+use bevy::prelude::{Component, Vec3};
+use bevy::time::Timer;
 
 #[derive(Component, Clone, Debug)]
 pub struct SpriteSize(pub Vec2);
@@ -29,3 +30,18 @@ pub struct LocalPlayer;
 
 #[derive(Component, Clone, Debug)]
 pub struct RemotePlayer(pub String); // the uuid
+
+#[derive(Component)]
+pub struct ExplosionToSpawn(pub Vec3);
+
+#[derive(Component)]
+pub struct Explosion;
+
+#[derive(Component)]
+pub struct ExplosionTimer(pub Timer);
+
+impl Default for ExplosionTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(0.05, true))
+    }
+}

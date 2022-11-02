@@ -1,5 +1,6 @@
 #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
+use crate::components::ExplosionToSpawn;
 use crate::resources::RemoteGamePlayerState;
 use anyhow::{Context, Result};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
@@ -8,7 +9,10 @@ use bevy::sprite::collide_aabb::collide;
 use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
-use components::{Collectible, LocalPlayer, Movable, RemotePlayer, SpriteSize, Velocity};
+use components::{
+    Collectible, Explosion, ExplosionTimer, LocalPlayer, Movable, RemotePlayer, SpriteSize,
+    Velocity,
+};
 use errors::ClientError;
 use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
@@ -55,6 +59,9 @@ const BACKGROUND_SIZE: (f32, f32) = (1000., 50.);
 const COLLECTIBLE_SPRITE: &str = "entities/token.png";
 const COLLECTIBLE_SIZE: (f32, f32) = (50., 50.);
 
+const EXPLOSION_SHEET: &str = "entities/explo_a_sheet.png";
+const EXPLOSION_LEN: usize = 16;
+
 fn main() {
     let mut app = App::new();
     app.insert_resource(WindowDescriptor {
@@ -78,7 +85,9 @@ fn main() {
             .with_system(on_local_player_moved_system)
             .with_system(entities_from_blockchain_update_system)
             .with_system(interpolate_blockchain_entities_state_system)
-            .with_system(player_collectible_collision_system),
+            .with_system(player_collectible_collision_system)
+            .with_system(explosion_to_spawn_system)
+            .with_system(explosion_animation_system),
     );
     app.run();
 }
@@ -86,6 +95,7 @@ fn main() {
 fn setup_system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut windows: ResMut<Windows>,
 ) {
     // 2D orthographic camera
@@ -107,10 +117,16 @@ fn setup_system(
         .map(|(index, s)| (*index, asset_server.load(*s)))
         .collect::<HashMap<usize, Handle<Image>>>();
 
+    // create explosion texture atlas
+    let texture_handle = asset_server.load(EXPLOSION_SHEET);
+    let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(64., 64.), 4, 4);
+    let explosion = texture_atlases.add(texture_atlas);
+
     let game_textures = GameTextures {
         player: player_sprites,
         collectible: collectible_texture.clone(),
         background: background_texture.clone(),
+        explosion,
     };
     commands.insert_resource(game_textures);
 
@@ -330,6 +346,11 @@ fn player_collectible_collision_system(
                 despawned_entities.insert(collectible_entity);
                 // remove token from all collection states
                 game_state.remove_collectible(&collectible_id.0);
+
+                // spawn the explosionToSpawn
+                commands
+                    .spawn()
+                    .insert(ExplosionToSpawn(collectible_tf.translation.clone()));
             }
         }
     }
@@ -379,5 +400,45 @@ fn on_local_player_moved_system(mut events: EventReader<PlayerMoved>) {
             pos.borrow_mut()
                 .from_game_vector(movement_event.pos, movement_event.rot);
         });
+    }
+}
+
+fn explosion_to_spawn_system(
+    mut commands: Commands,
+    game_textures: Res<GameTextures>,
+    query: Query<(Entity, &ExplosionToSpawn)>,
+) {
+    for (explosion_spawn_entity, explosion_to_spawn) in query.iter() {
+        // spawn the explosion sprite
+        commands
+            .spawn_bundle(SpriteSheetBundle {
+                texture_atlas: game_textures.explosion.clone(),
+                transform: Transform {
+                    translation: explosion_to_spawn.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .insert(Explosion)
+            .insert(ExplosionTimer::default());
+
+        // despawn the explosionToSpawn
+        commands.entity(explosion_spawn_entity).despawn();
+    }
+}
+
+fn explosion_animation_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut ExplosionTimer, &mut TextureAtlasSprite), With<Explosion>>,
+) {
+    for (entity, mut timer, mut sprite) in query.iter_mut() {
+        timer.0.tick(time.delta());
+        if timer.0.finished() {
+            sprite.index += 1; // move to next sprite cell
+            if sprite.index >= EXPLOSION_LEN {
+                commands.entity(entity).despawn()
+            }
+        }
     }
 }

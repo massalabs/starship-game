@@ -8,6 +8,7 @@ pub struct GameTextures {
     pub player: HashMap<usize, Handle<Image>>,
     pub collectible: Handle<Image>,
     pub background: Handle<Image>,
+    pub explosion: Handle<TextureAtlas>,
 }
 
 #[derive(Debug, Clone)]
