@@ -29,6 +29,15 @@ export function transferFrom(args: string): string {
   return token.transferFrom(args);
 }
 
+export function mint(args: string): string {
+  return token.mint(args);
+}
+
+export function setTokenOwner(args: string): void {
+  token.setTokenOwner(args);
+}
+
+
 // For this example we just want to rename the token
 // Everything else will be kept as defined in the mscl-token/erc20 module
 

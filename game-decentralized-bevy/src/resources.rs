@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::HashMap};
+use serde::Serialize;
 use std::collections::BTreeMap;
 use wasm_bindgen::JsValue;
 
@@ -21,14 +22,6 @@ pub enum EntityType {
     Remote,
 }
 
-pub fn map_type(r#type: &JsValue) -> EntityType {
-    return match r#type.as_string().unwrap().as_str() {
-        "local" => EntityType::Local,
-        "remote" => EntityType::Remote,
-        _ => EntityType::Remote,
-    };
-}
-
 #[derive(Clone, Debug)]
 pub struct RemoteGamePlayerState {
     pub uuid: String,
@@ -39,6 +32,15 @@ pub struct RemoteGamePlayerState {
     /// rotation speed in radians per second
     pub rotation: Quat,
     pub r#type: EntityType,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectedEntity {
+    pub uuid: String,
+    pub player_uuid: String,
+    pub value: f64,
+    pub time: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -53,7 +55,7 @@ pub enum RemoteStateType {
     PlayerAdded(RemoteGamePlayerState),
     PlayerRemoved(RemoteGamePlayerState), //uuid
     PlayerMoved(RemoteGamePlayerState),
-    TokenCollected((String, String)), // token uuid - player uuid
+    TokenCollected(CollectedEntity),
     TokenAdded(RemoteCollectibleState),
     TokenRemoved(RemoteCollectibleState), // uuid
 }

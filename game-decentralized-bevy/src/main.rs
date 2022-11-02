@@ -1,6 +1,7 @@
 #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
 use crate::resources::RemoteGamePlayerState;
+use anyhow::{Context, Result};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::Vec3Swizzles;
 use bevy::sprite::collide_aabb::collide;
@@ -8,20 +9,25 @@ use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 use components::{Collectible, LocalPlayer, Movable, RemotePlayer, SpriteSize, Velocity};
+use errors::ClientError;
 use events::PlayerMoved;
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use resources::{
-    map_type, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState, RemoteStateType,
-    WinSize,
+    CollectedEntity, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState,
+    RemoteStateType, WinSize,
+};
+use rust_js_mappers::{
+    get_key_value_from_obj, get_value_for_key, map_js_update_to_rust_entity_state,
 };
 use std::collections::HashSet;
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
 
-pub mod collectible;
 pub mod components;
+pub mod errors;
 pub mod events;
 pub mod resources;
+pub mod rust_js_mappers;
 pub mod utils;
 pub mod wasm;
 
@@ -49,16 +55,6 @@ const BACKGROUND_SIZE: (f32, f32) = (1000., 50.);
 const COLLECTIBLE_SPRITE: &str = "entities/token.png";
 const COLLECTIBLE_SIZE: (f32, f32) = (50., 50.);
 
-// player game events
-const PLAYER_MOVED: &'static str = "PLAYER_MOVED";
-const PLAYER_ADDED: &'static str = "PLAYER_ADDED";
-const PLAYER_REMOVED: &'static str = "PLAYER_REMOVED";
-
-// token game events
-const TOKEN_ADDED: &'static str = "TOKEN_ADDED";
-const TOKEN_REMOVED: &'static str = "TOKEN_REMOVED";
-const TOKEN_COLLECTED: &'static str = "TOKEN_COLLECTED";
-
 fn main() {
     let mut app = App::new();
     app.insert_resource(WindowDescriptor {
@@ -75,11 +71,15 @@ fn main() {
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
-    app.add_system(local_player_movement_system);
-    app.add_system(on_local_player_moved_system);
-    app.add_system(entities_from_blockchain_update_system);
-    app.add_system(interpolate_blockchain_entities_state_system);
-    app.add_system(player_collectible_collision_system);
+    app.add_system_set(
+        SystemSet::new()
+            .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+            .with_system(local_player_movement_system)
+            .with_system(on_local_player_moved_system)
+            .with_system(entities_from_blockchain_update_system)
+            .with_system(interpolate_blockchain_entities_state_system)
+            .with_system(player_collectible_collision_system),
+    );
     app.run();
 }
 
@@ -125,110 +125,6 @@ fn setup_system(
     });
 }
 
-fn get_value_for_key(
-    key: &str,
-    object: &JsValue,
-) -> Option<JsValue> {
-    let key = JsValue::from(key);
-    let value = Reflect::get(&object, &key).ok();
-    value
-}
-
-fn map_js_update_to_rust_entity_state(entity: GameEntityUpdate) -> Option<RemoteStateType> {
-    let js_obj: JsValue = entity.into();
-    //  we can safely unwrap all options as we know that none-existing js values will be marked as JsValue::unedefined
-    let operation = get_value_for_key("operation", &js_obj).expect("Some operation to be present");
-    let uuid = get_value_for_key("uuid", &js_obj).expect("Some uuid to be present");
-    let address = get_value_for_key("address", &js_obj).expect("Some address to be present");
-    let name = get_value_for_key("name", &js_obj).expect("Some name to be present");
-    let x = get_value_for_key("x", &js_obj).expect("Some x to be present");
-    let y = get_value_for_key("y", &js_obj).expect("Some y to be present");
-    let rot = get_value_for_key("rot", &js_obj).expect("Some rot to be present");
-    let w = get_value_for_key("w", &js_obj).expect("Some w to be present");
-    let r#type = get_value_for_key("type", &js_obj).expect("Some type to be present");
-
-    let entity_state = if operation.eq(&JsValue::from(PLAYER_ADDED)) {
-        //info!("PLAYER_ADDED");
-        Some(RemoteStateType::PlayerAdded(RemoteGamePlayerState {
-            uuid: uuid.as_string().unwrap(),
-            address: address.as_string().unwrap(),
-            name: name.as_string().unwrap(),
-            position: Vec3::new(
-                x.as_f64().unwrap() as f32,
-                y.as_f64().unwrap() as f32,
-                0.0f32,
-            ),
-            rotation: Quat::from_array([
-                0.,
-                0.,
-                rot.as_f64().unwrap() as f32,
-                w.as_f64().unwrap() as f32,
-            ]),
-            r#type: map_type(&r#type),
-        }))
-    } else if operation.eq(&JsValue::from(PLAYER_MOVED)) {
-        //info!("PLAYER_MOVED");
-        Some(RemoteStateType::PlayerMoved(RemoteGamePlayerState {
-            uuid: uuid.as_string().unwrap(),
-            address: address.as_string().unwrap(),
-            name: name.as_string().unwrap(),
-            position: Vec3::new(
-                x.as_f64().unwrap() as f32,
-                y.as_f64().unwrap() as f32,
-                0.0f32,
-            ),
-            rotation: Quat::from_array([
-                0.,
-                0.,
-                rot.as_f64().unwrap() as f32,
-                w.as_f64().unwrap() as f32,
-            ]),
-            r#type: map_type(&r#type),
-        }))
-    } else if operation.eq(&JsValue::from(PLAYER_REMOVED)) {
-        //info!("PLAYER_REMOVED");
-        Some(RemoteStateType::PlayerRemoved(RemoteGamePlayerState {
-            uuid: uuid.as_string().unwrap(),
-            address: address.as_string().unwrap(),
-            name: name.as_string().unwrap(),
-            position: Vec3::new(
-                x.as_f64().unwrap() as f32,
-                y.as_f64().unwrap() as f32,
-                0.0f32,
-            ),
-            rotation: Quat::NAN,
-            r#type: map_type(&r#type),
-        }))
-    } else if operation.eq(&JsValue::from(TOKEN_COLLECTED)) {
-        //info!("TOKEN_COLLECTED");
-        None
-    } else if operation.eq(&JsValue::from(TOKEN_ADDED)) {
-        //info!("TOKEN_ADDED");
-        Some(RemoteStateType::TokenAdded(RemoteCollectibleState {
-            uuid: uuid.as_string().unwrap(),
-            position: Vec3::new(
-                x.as_f64().unwrap() as f32,
-                y.as_f64().unwrap() as f32,
-                0.0f32,
-            ),
-        }))
-    } else if operation.eq(&JsValue::from(TOKEN_REMOVED)) {
-        //info!("TOKEN_REMOVED");
-        Some(RemoteStateType::TokenRemoved(RemoteCollectibleState {
-            uuid: uuid.as_string().unwrap(),
-            position: Vec3::new(
-                x.as_f64().unwrap() as f32,
-                y.as_f64().unwrap() as f32,
-                0.0f32,
-            ),
-        }))
-    } else {
-        None
-    };
-
-    entity_state
-}
-
 fn entities_from_blockchain_update_system(
     time: Res<Time>,
     mut commands: Commands,
@@ -238,7 +134,9 @@ fn entities_from_blockchain_update_system(
     GAME_ENTITY_UPDATE.with(|entities_update| {
         let entities_update = entities_update.take();
         for entity in entities_update.into_iter() {
-            let mapped_update = map_js_update_to_rust_entity_state(entity);
+            let mapped_update = map_js_update_to_rust_entity_state(entity)
+                .map_err(|err| error!("Map error {:?}", err.to_string()))
+                .unwrap();
             match mapped_update {
                 Some(RemoteStateType::PlayerAdded(player_added)) => {
                     match player_added.r#type {
@@ -426,6 +324,7 @@ fn player_collectible_collision_system(
 
             // perform collision
             if let Some(_) = collision {
+                info!("COLLISION: Entity UUID {:?}", &collectible_id.0);
                 // remove the collectible
                 commands.entity(collectible_entity).despawn();
                 despawned_entities.insert(collectible_entity);

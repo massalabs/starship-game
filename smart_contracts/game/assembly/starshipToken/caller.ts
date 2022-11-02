@@ -1,5 +1,6 @@
+import {Amount, ByteArray} from '@massalabs/as/assembly';
 import {
-  fileToBase64, createSC, Address, print, generateEvent,
+  fileToBase64, call, createSC, Address, print, generateEvent, Context,
 } from '@massalabs/massa-as-sdk/assembly';
 
 /**
@@ -34,7 +35,20 @@ function loadSC(): Address {
 export function main(_: string): i32 {
   // eslint-disable-line @typescript-eslint/no-unused-vars
   const scAddress = loadSC();
-  print('Created token smart-contract at:' + scAddress._value);
+
+  // set token owner address (= the calling account)
+  call(scAddress, 'setTokenOwner', '', 0);
+
+  // mint many tokens for the token owner
+  const receiverAddress = Context.transactionCreator();
+  const nbTokens = new Amount(10000);
+  const mintOpArgs = receiverAddress
+      .toStringSegment()
+      .concat(ByteArray.fromU64(nbTokens.value()).toByteString());
+  call(scAddress, 'mint', mintOpArgs, 0);
+
+  // print info and generate event
+  print('Created token smart-contract at:' + scAddress.toByteString());
   generateEvent(`Address:${scAddress._value}`);
   return 0;
 }

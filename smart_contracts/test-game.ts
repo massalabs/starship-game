@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A1q2bgGi2sspZVzKrgwN7GeAkxeqrxVh41mMa9i3fmHrPgwSiS";
+        const scAddress = "A12pJzxFHpPbdNeQ65hq8tR4RU5B272YFsjgQVEeLGgLYiK7JU8j";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -269,8 +269,28 @@ import { IDatastoreEntryInput,
         */
 
         // ========================================================================= 
+        /*
+        // get collectibles state
+        while (true) {
+            console.log(`Reading a smart contract state...`);
+            const readTxId = await web3Client.smartContracts().readSmartContract({
+                fee: 0,
+                maxGas: 200000,
+                simulatedGasPrice: 0,
+                targetAddress: scAddress,
+                targetFunction: "getCollectiblesState",
+                parameter: playerAddress,
+                callerAddress: playerAddress
+            } as IReadData);
+            const data = readTxId[0].output_events[0].data;
+            const tokensArray = data.split("@");
+            console.log("PLAYER TOKENS ", tokensArray.length, tokensArray);
+        }
+        */
 
-        // get player balance
+        // ========================================================================= 
+
+        // get player balance directly from token
         /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
@@ -320,11 +340,11 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get sc storage data
-        
+        /*
         console.log(`Reading a smart state entry...`);
         const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: `registered_players_states_key::${playerAddress}` } as IDatastoreEntryInput]);
         console.log(`Got smart contract storage data for key: ${(JSON.stringify(scStorageData, null, 4))}`);
-        
+        */
 
     } catch (ex) {
         const msg = console.log(`Error = ${(ex as Error).message}`);

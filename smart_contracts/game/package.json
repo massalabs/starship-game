@@ -31,7 +31,7 @@
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.0.0",
     "@massalabs/as": "1.0.0",
-    "@massalabs/massa-as-sdk": "1.0.0",
+    "@massalabs/massa-as-sdk": "https://github.com/massalabs/massa-as-sdk.git#feature/token-mint",
     "prettier": "^2.6.2",
     "typedoc": "^0.23.14",
     "typedoc-plugin-markdown": "^3.13.6",

@@ -1,4 +1,6 @@
+use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use rand::Rng;
+use wasm_bindgen::{JsCast, JsValue};
 
 pub fn get_random_f32(
     lower_bound: f32,
