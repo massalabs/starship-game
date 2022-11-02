@@ -1,18 +1,7 @@
 /* eslint-disable require-jsdoc */
 
 /**
- * The Massa's standard token implementation wrapper.
- *
- * This class can be used to wrap a smart contract implementing
- * Massa standard token.
- * All the serialization/deserialization will handled here.
- *
- * ```assembyscript
- *  ...
- *  const coin = new TokenWrapper(sc_address);
- *  const coinName = coin.Name();
- *  const bal = coin.BalanceOf(myAddress);
- *  print("balance: " + bal.toString() + " of token: " + coinName);
+ * A rectangle class allowing to determine intersections between collision boxes
  * ...
  * ```
  */

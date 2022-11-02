@@ -19,10 +19,10 @@ import {Rectangle, _isIntersection} from './utils/rectangle';
 import {PlayerEntity} from './entities/playerEntity';
 import {CollectibleEntity} from './entities/collectibleEntity';
 import {CollectedEntityEvent} from './events/collectedEntityEvent';
-import {_formatGameEvent, _generateAsyncEvent, _sendGameEvent} from './events/gameEmitter';
+import {_formatGameEvent, _generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
 import {RegisterPlayerRequest} from './requests/RegisterPlayerRequest';
 import {PlayerTokenCollected} from './playerTokenCollected';
-import {_generateUuid, _randomCoordInRange, _randomUintInRange} from './utils/utils';
+import {_generateUuid, _randomCoordInRange, _randomUintInRange} from './utils/random';
 import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   ACTIVE_PLAYERS_KEY,
   COLLECTIBLE_BOUNDING_BOX,
@@ -38,7 +38,8 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   PLAYER_REMOVED,
   REGISTERED_PLAYERS_MAP_KEY,
   REGISTERED_PLAYERS_STATES_MAP_KEY,
-  REGISTERED_PLAYERS_TOKENS_MAP_KEY,
+  REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY,
+  REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY,
   SCREEN_HEIGHT_ADJUSTED,
   SCREEN_HEIGHT_KEY,
   SCREEN_WIDTH_ADJUSTED,
@@ -50,6 +51,8 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   TOKEN_COLLECTED,
   TOKEN_REMOVED,
   TOTAL_ONSCREEN_TOKENS} from './config';
+
+export {_generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
 
 // registered players map [player_address - bool]
 export const registeredPlayers = new collections.PersistentMap<string, boolean>(
@@ -63,7 +66,12 @@ export const playerStates = new collections.PersistentMap<string, string>(
 
 // registered players tokens map [player_address - token count (number)]
 export const playerTokensCount = new collections.PersistentMap<string, string>(
-    REGISTERED_PLAYERS_TOKENS_MAP_KEY
+    REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY
+);
+
+// registered players tokens uuids map [player_address - vec![token uuids (string)] serialized]
+export const playerTokensUuids = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY
 );
 
 // generated tokens map (token_index - token_data)
@@ -583,17 +591,40 @@ export function _checkTokenCollected(args: string): void {
     );
 
     if (_isIntersection(collectibleCbox, playerCbox)) {
+      // check if the collectible has already been collected
+      let isAlreadyCollected = false;
+      let playerCollectedTokenUuids = playerTokensUuids.get(playerPos.address);
+      if (playerCollectedTokenUuids) {
+        const collectedUuids = playerCollectedTokenUuids.split(',');
+        for (let uuidIndex: i32 = 0; uuidIndex < collectedUuids.length; uuidIndex++) {
+          if (collectibleEntity.uuid === collectedUuids[uuidIndex]) {
+            isAlreadyCollected = true;
+          }
+        }
+        if (!isAlreadyCollected) {
+          playerCollectedTokenUuids = `${playerCollectedTokenUuids},${collectibleEntity.uuid}`;
+        }
+      } else {
+        playerCollectedTokenUuids = `${collectibleEntity.uuid}`;
+      }
+      playerTokensUuids.set(playerPos.address, playerCollectedTokenUuids);
+
+      // if already collected, return
+      if (isAlreadyCollected) {
+        return;
+      }
+
+      // transfer the token to the player
       _playerCollectibleClaim(
           new Address(playerPos.address),
           new Amount(<u64>collectibleEntity.value)
       );
 
-      // add token to player collected tokens
+      // increase player collected tokens count
       const playerTokensCountStr = playerTokensCount.get(
           playerPos.address
       );
       const playerTokensCountIncreased = (playerTokensCountStr ? parseFloat(playerTokensCountStr) : 0.0) + 1.0;
-      // add update back to hashmap
       playerTokensCount.set(playerPos.address, playerTokensCountIncreased.toString());
 
       // append currently collected token to state
@@ -628,7 +659,7 @@ function _playerCollectibleClaim(
   // get collectible impl wrapper
   const collToken = new token.TokenWrapper(tokenAddress);
   // token transfers X amount to player
-  collToken.transfer(playerAddress, collectibleValue);
+  collToken.mint(playerAddress, collectibleValue);
 }
 
 /**
