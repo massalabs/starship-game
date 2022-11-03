@@ -50,7 +50,7 @@ const LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
 const LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
 
 const PLAYER_SPRITES: [(usize, &str); 2] =
-    [(1, "entities/local.v1.png"), (2, "entities/remote.v1.png")];
+    [(1, "entities/local.v1.png"), (2, "entities/remote.v2.png")];
 const PLAYER_SIZE: (f32, f32) = (128., 128.);
 
 const BACKGROUND_SPRITE: &str = "entities/galaxy.png";
@@ -188,7 +188,7 @@ fn entities_from_blockchain_update_system(
                                 .is_none()
                             {
                                 // get texture for remote player
-                                let player_texture = game_textures.player.get(&1).cloned().unwrap();
+                                let player_texture = game_textures.player.get(&2).cloned().unwrap();
 
                                 let spawned_remote_player = commands
                                     .spawn_bundle(SpriteBundle {

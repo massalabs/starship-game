@@ -71,7 +71,7 @@ const schema = {
 			description: "Amount to send",
 			required: true,
 			type: "number",
-			default: 10
+			default: 5000
 		},
 		fee: {
 			description: "Fee",
