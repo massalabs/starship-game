@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A15Ji8Ky9fwwXbJGfgYCbwp1edNkyeuaYdmJUVtfXPmgxwgMTRD";
+        const scAddress = "A12dz5QxyVn3Dakq6G1kHM8S3uEoGTTSRW4HVwHikXQb8VGR1w2";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -95,7 +95,7 @@ import { IDatastoreEntryInput,
         // ============================================
 
         // remove player
-        /*
+        
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -123,7 +123,7 @@ import { IDatastoreEntryInput,
         } as IEventFilter, web3Client);
 
         console.log("REMOVE PLAYER EVENTS ", events);
-        */
+        
 
         // ========================================================================= 
 
@@ -291,7 +291,7 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get player balance directly from token
-        
+        /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
@@ -304,7 +304,7 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("PLAYER BALANCE ", readTxId[0].output_events[0].data);
-        
+        */
         
 
         /*

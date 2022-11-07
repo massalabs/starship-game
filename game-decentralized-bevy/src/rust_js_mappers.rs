@@ -3,7 +3,8 @@ use wasm_bindgen::{JsCast, JsValue};
 
 use crate::errors::ClientError;
 use crate::events::{
-    PLAYER_ADDED, PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
+    CollectedEntityEventData, RemoteCollectibleEventData, RemotePlayerEventData, PLAYER_ADDED,
+    PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
 };
 use crate::resources::{
     CollectedEntity, EntityType, RemoteCollectibleState, RemoteGamePlayerState, RemoteStateType,
@@ -78,6 +79,14 @@ pub fn map_type(r#type: &JsValue) -> EntityType {
     };
 }
 
+pub fn map_type_from_str(r#type: &str) -> EntityType {
+    return match r#type {
+        "local" => EntityType::Local,
+        "remote" => EntityType::Remote,
+        _ => EntityType::Remote,
+    };
+}
+
 // ==============================
 
 pub fn map_js_update_to_rust_entity_state(
@@ -85,86 +94,61 @@ pub fn map_js_update_to_rust_entity_state(
 ) -> Result<Option<RemoteStateType>, ClientError> {
     let js_obj: JsValue = entity.into();
 
-    //  we can safely unwrap all options as we know that none-existing js values will be marked as JsValue::unedefined
+    //  we can safely unwrap all options as we know that none-existing js values will be marked as JsValue::undefined
     let operation = get_key_value_from_obj::<String>("operation", &js_obj)
         .ok_or(ClientError::MissingOperationKey)?;
 
     match operation.as_str() {
         PLAYER_ADDED | PLAYER_MOVED | PLAYER_REMOVED => {
-            info!("PLAYER ACTION {:?} ", operation.as_str());
-            let player_state = RemoteGamePlayerState {
-                uuid: get_key_value_from_obj::<String>("uuid", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("uuid".to_owned()))?,
-                address: get_key_value_from_obj::<String>("address", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("address".to_owned()))?,
-                name: get_key_value_from_obj::<String>("name", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("name".to_owned()))?,
-                position: Vec3::new(
-                    get_key_value_from_obj::<f64>("x", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("x".to_owned()))?
-                        as f32,
-                    get_key_value_from_obj::<f64>("y", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("y".to_owned()))?
-                        as f32,
-                    0.0f32,
-                ),
-                rotation: Quat::from_array([
-                    0.,
-                    0.,
-                    get_key_value_from_obj::<f64>("rot", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("rot".to_owned()))?
-                        as f32,
-                    get_key_value_from_obj::<f64>("w", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("w".to_owned()))?
-                        as f32,
-                ]),
-                r#type: map_type(
-                    &get_value_for_key("type", &js_obj).expect("Some type to be present"),
-                ),
-            };
+            //info!("PLAYER ACTION {:?} ", operation.as_str());
+            let remote_player_event = get_key_value_from_obj::<String>("data", &js_obj)
+                .map(|data| serde_json::from_str::<RemotePlayerEventData>(data.as_str()).ok())
+                .flatten()
+                .map(|data| RemoteGamePlayerState {
+                    uuid: data.uuid,
+                    address: data.address,
+                    name: data.name,
+                    position: Vec3::new(data.x as f32, data.y as f32, 0.0f32),
+                    rotation: Quat::from_array([0., 0., data.rot as f32, data.w as f32]),
+                    r#type: map_type_from_str(&data.r#type),
+                });
 
             match operation.as_str() {
-                PLAYER_ADDED => Ok(Some(RemoteStateType::PlayerAdded(player_state))),
-                PLAYER_MOVED => Ok(Some(RemoteStateType::PlayerMoved(player_state))),
-                PLAYER_REMOVED => Ok(Some(RemoteStateType::PlayerRemoved(player_state))),
+                PLAYER_ADDED => Ok(remote_player_event.map(RemoteStateType::PlayerAdded)),
+                PLAYER_MOVED => Ok(remote_player_event.map(RemoteStateType::PlayerMoved)),
+                PLAYER_REMOVED => Ok(remote_player_event.map(RemoteStateType::PlayerRemoved)),
                 _ => Err(ClientError::UnknownOperationReceived),
             }
         }
         TOKEN_ADDED | TOKEN_REMOVED => {
-            info!("TOKEN ACTION {:?} ", operation.as_str());
-            let token_state = RemoteCollectibleState {
-                uuid: get_key_value_from_obj::<String>("uuid", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("uuid".to_owned()))?,
-                position: Vec3::new(
-                    get_key_value_from_obj::<f64>("x", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("x".to_owned()))?
-                        as f32,
-                    get_key_value_from_obj::<f64>("y", &js_obj)
-                        .ok_or(ClientError::UnparsableKeyValueJsValue("y".to_owned()))?
-                        as f32,
-                    0.0f32,
-                ),
-            };
+            //info!("TOKEN ACTION {:?} ", operation.as_str());
+            let collected_entity_event = get_key_value_from_obj::<String>("data", &js_obj)
+                .map(|data| serde_json::from_str::<RemoteCollectibleEventData>(data.as_str()).ok())
+                .flatten()
+                .map(|data| RemoteCollectibleState {
+                    uuid: data.uuid,
+                    position: Vec3::new(data.x as f32, data.y as f32, 0.0f32),
+                });
+
             match operation.as_str() {
-                TOKEN_ADDED => Ok(Some(RemoteStateType::TokenAdded(token_state))),
-                TOKEN_REMOVED => Ok(Some(RemoteStateType::TokenRemoved(token_state))),
+                TOKEN_ADDED => Ok(collected_entity_event.map(RemoteStateType::TokenAdded)),
+                TOKEN_REMOVED => Ok(collected_entity_event.map(RemoteStateType::TokenRemoved)),
                 _ => Err(ClientError::UnknownOperationReceived),
             }
         }
         TOKEN_COLLECTED => {
-            let res = Ok(Some(RemoteStateType::TokenCollected(CollectedEntity {
-                uuid: get_key_value_from_obj::<String>("uuid", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("uuid".to_owned()))?,
-                player_uuid: get_key_value_from_obj::<String>("playerUuid", &js_obj).ok_or(
-                    ClientError::UnparsableKeyValueJsValue("playerUuid".to_owned()),
-                )?,
-                value: get_key_value_from_obj::<f64>("value", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("value".to_owned()))?,
-                time: get_key_value_from_obj::<f64>("time", &js_obj)
-                    .ok_or(ClientError::UnparsableKeyValueJsValue("time".to_owned()))?,
-            })));
-            info!("TOKEN COLLECTED {:?} ", res);
-            res
+            let collected_entity_event = get_key_value_from_obj::<String>("data", &js_obj)
+                .map(|data| serde_json::from_str::<CollectedEntityEventData>(data.as_str()).ok())
+                .flatten()
+                .map(|data| CollectedEntity {
+                    uuid: data.uuid,
+                    player_uuid: data.player_uuid,
+                    value: data.value,
+                    time: data.time,
+                });
+
+            //info!("TOKEN COLLECTED {:?}", &collected_entity_event);
+            return Ok(collected_entity_event.map(RemoteStateType::TokenCollected));
         }
         _ => return Ok(None),
     }

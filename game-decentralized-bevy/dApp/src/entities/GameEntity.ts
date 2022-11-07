@@ -5,25 +5,11 @@ export const ENTITY_TYPE = {
 
 export class GameEntityUpdate {
     public operation: string;
-    public uuid: string;
-    public address: string;
-    public name: string;
-    public x: number;
-    public y: number;
-    public rot: number;
-    public w: number;
-    public type: string;
+    public data?: string;
   
-    constructor(operation: string, uuid: string, address: string, name: string, x: number, y: number, rot: number, w: number, type: string) {
+    constructor(operation: string, data: string) {
       this.operation = operation;
-      this.uuid = uuid;
-      this.address = address;
-      this.name = name;
-      this.x = x;
-      this.y = y;
-      this.rot = rot;
-      this.w = w;
-      this.type = type;
+      this.data = data;
     }
     // ------------------------------------
     set set_operation(operation: string) {
@@ -33,52 +19,10 @@ export class GameEntityUpdate {
       return this.operation;
     }
     // ------------------------------------
-    set set_uuid(uuid: string) {
-        this.uuid = uuid;
+    set set_data(data: string) {
+        this.data = data;
     }
-    get get_uuid() {
-        return this.uuid;
-    }
-    // ------------------------------------
-    set set_address(address: string) {
-        this.address = address;
-    }
-    get get_address() {
-        return this.address;
-    }
-    // ------------------------------------
-    set set_name(name: string) {
-        this.name = name;
-    }
-    get get_name() {
-        return this.name;
-    }
-    // ------------------------------------
-    set set_x(x: number) {
-        this.x = x;
-    }
-    get get_x() {
-        return this.x;
-    }
-    // ------------------------------------
-    set set_y(y: number) {
-        this.y = y;
-    }
-    get get_y() {
-        return this.y;
-    }
-    // ------------------------------------
-    set set_rot(rot: number) {
-        this.rot = rot;
-    }
-    get get_rot() {
-        return this.rot;
-    }
-    // ------------------------------------
-    set set_w(w: number) {
-        this.w = w;
-    }
-    get get_w() {
-        return this.w;
+    get get_data() {
+        return this.data;
     }
   }

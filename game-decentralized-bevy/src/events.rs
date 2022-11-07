@@ -1,5 +1,5 @@
 use bevy::prelude::{Quat, Vec3};
-
+use serde::{Deserialize, Serialize};
 /// Event being sent out when the own player moves
 #[derive(Debug)]
 pub struct PlayerMoved {
@@ -16,3 +16,33 @@ pub const PLAYER_REMOVED: &'static str = "PLAYER_REMOVED";
 pub const TOKEN_ADDED: &'static str = "TOKEN_ADDED";
 pub const TOKEN_REMOVED: &'static str = "TOKEN_REMOVED";
 pub const TOKEN_COLLECTED: &'static str = "TOKEN_COLLECTED";
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteCollectibleEventData {
+    pub uuid: String,
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemotePlayerEventData {
+    pub uuid: String,
+    pub address: String,
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
+    pub rot: f64,
+    pub w: f64,
+    pub r#type: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectedEntityEventData {
+    pub uuid: String,
+    pub player_uuid: String,
+    pub value: f64,
+    pub time: f64,
+}

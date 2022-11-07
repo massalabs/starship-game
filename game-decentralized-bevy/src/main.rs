@@ -2,16 +2,19 @@
 
 use crate::components::ExplosionToSpawn;
 use crate::resources::RemoteGamePlayerState;
+use crate::utils::spawn_player_name_text2d_entity;
 use anyhow::{Context, Result};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::Vec3Swizzles;
 use bevy::sprite::collide_aabb::collide;
+use bevy::text::Text2dBounds;
 use bevy::utils::HashMap;
 use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
+use bevy_debug_text_overlay::{screen_print, OverlayPlugin};
 use components::{
-    Collectible, Explosion, ExplosionTimer, LocalPlayer, Movable, RemotePlayer, SpriteSize,
-    Velocity,
+    AnimateNameTranslation, Collectible, Explosion, ExplosionTimer, LocalPlayer, Movable,
+    RemotePlayer, SpriteSize, Velocity,
 };
 use errors::ClientError;
 use events::PlayerMoved;
@@ -74,6 +77,10 @@ fn main() {
         ..Default::default()
     });
     app.add_plugins(DefaultPlugins);
+    app.add_plugin(OverlayPlugin {
+        font_size: 16.0,
+        ..default()
+    });
     app.add_event::<PlayerMoved>();
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
@@ -81,15 +88,24 @@ fn main() {
     app.add_system_set(
         SystemSet::new()
             .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+            .with_system(screen_print_text)
             .with_system(local_player_movement_system)
             .with_system(on_local_player_moved_system)
             .with_system(entities_from_blockchain_update_system)
             .with_system(interpolate_blockchain_entities_state_system)
+            .with_system(local_player_animation)
             .with_system(player_collectible_collision_system)
             .with_system(explosion_to_spawn_system)
             .with_system(explosion_animation_system),
     );
     app.run();
+}
+
+fn screen_print_text(time: Res<Time>) {
+    let current_time = time.seconds_since_startup();
+    let last_fps = 1.0 / time.delta_seconds_f64();
+    screen_print!(sec: 1, col: Color::CYAN, "fps: {last_fps:.0}");
+    screen_print!(sec: 1, col: Color::GREEN, "current time: {current_time:.2}");
 }
 
 fn setup_system(
@@ -145,6 +161,7 @@ fn entities_from_blockchain_update_system(
     time: Res<Time>,
     mut commands: Commands,
     mut game_state: ResMut<RemoteGameState>,
+    asset_server: Res<AssetServer>,
     game_textures: Res<GameTextures>,
 ) {
     GAME_ENTITY_UPDATE.with(|entities_update| {
@@ -158,9 +175,10 @@ fn entities_from_blockchain_update_system(
                     match player_added.r#type {
                         EntityType::Local => {
                             // get texture for local player
-                            let player_texture = game_textures.player.get(&1).cloned().unwrap();
+                            let player_texture = game_textures.player.get(&2).cloned().unwrap();
 
-                            commands
+                            // spawn the local player
+                            let local_player_entity = commands
                                 .spawn_bundle(SpriteBundle {
                                     texture: player_texture,
                                     transform: Transform {
@@ -179,7 +197,25 @@ fn entities_from_blockchain_update_system(
                                 .insert(Velocity {
                                     linear: LINEAR_MOVEMENT_SPEED,
                                     rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
-                                });
+                                })
+                                .id();
+
+                            // spawn the text entity
+                            let text2d_entity = spawn_player_name_text2d_entity(
+                                &mut commands,
+                                &asset_server,
+                                &player_added.name,
+                                &player_added.position,
+                            );
+                            commands
+                                .entity(text2d_entity)
+                                .insert(AnimateNameTranslation(local_player_entity));
+
+                            // add player tag to resources
+                            game_state.add_new_player_tag(
+                                &player_added.uuid,
+                                text2d_entity,
+                            );
                         }
                         EntityType::Remote => {
                             // add player to state and spawn new entity only if new player uuid
@@ -190,7 +226,8 @@ fn entities_from_blockchain_update_system(
                                 // get texture for remote player
                                 let player_texture = game_textures.player.get(&2).cloned().unwrap();
 
-                                let spawned_remote_player = commands
+                                // spawn a new player entity
+                                let spawned_remote_player_entity = commands
                                     .spawn_bundle(SpriteBundle {
                                         texture: player_texture,
                                         transform: Transform {
@@ -210,22 +247,49 @@ fn entities_from_blockchain_update_system(
                                     })
                                     .id();
 
+                                // spawn the text entity
+                                let text2d_entity = spawn_player_name_text2d_entity(
+                                    &mut commands,
+                                    &asset_server,
+                                    &player_added.name,
+                                    &player_added.position,
+                                );
+                                commands
+                                    .entity(text2d_entity)
+                                    .insert(AnimateNameTranslation(spawned_remote_player_entity));
+
+                                // add player entity to resources
                                 game_state.add_new_remote_player_entity(
                                     &player_added.uuid,
-                                    spawned_remote_player,
+                                    spawned_remote_player_entity,
+                                );
+
+                                // add player tag to resources
+                                game_state.add_new_player_tag(
+                                    &player_added.uuid,
+                                    text2d_entity,
                                 );
                             }
                         }
                     }
                 }
                 Some(RemoteStateType::PlayerRemoved(player_to_remove)) => {
-                    // despawn entity id
+                    // despawn player entity id
                     if let Some(entity_id) =
                         game_state.get_remote_player_entity(&player_to_remove.uuid)
                     {
                         // despawn the remote player entity
                         commands.entity(*entity_id).despawn();
                     }
+
+                    // despawn entity id
+                    if let Some(entity_id) =
+                        game_state.get_player_tag_entity(&player_to_remove.uuid)
+                    {
+                        // despawn the remote player tag entity
+                        commands.entity(*entity_id).despawn();
+                    }
+
                     // remove player from all collection states
                     game_state.remove_remote_player(&player_to_remove.uuid);
                 }
@@ -238,7 +302,6 @@ fn entities_from_blockchain_update_system(
                             .insert(player_moved.uuid.clone(), player_moved.clone());
                     }
                 }
-                Some(RemoteStateType::TokenCollected(token_collected)) => { /* TODO */ }
                 Some(RemoteStateType::TokenAdded(token_added)) => {
                     let mut spawn_collectible_closure = |collectible_texture: Handle<Image>,
                                                          state: RemoteCollectibleState|
@@ -266,15 +329,15 @@ fn entities_from_blockchain_update_system(
                     );
                     game_state.add_new_collectible_entity(&token_added.uuid, entity_id);
                 }
-                Some(RemoteStateType::TokenRemoved(token_removed)) => {
+                Some(RemoteStateType::TokenRemoved(RemoteCollectibleState { uuid, .. }))
+                | Some(RemoteStateType::TokenCollected(CollectedEntity { uuid, .. })) => {
                     // despawn entity id
-                    if let Some(entity_id) = game_state.get_collectible_entity(&token_removed.uuid)
-                    {
+                    if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
                         // despawn the remote collectible entity
                         commands.entity(*entity_id).despawn();
+                        // remove token from all collection states
+                        game_state.remove_collectible(&uuid);
                     }
-                    // remove token from all collection states
-                    game_state.remove_collectible(&token_removed.uuid);
                 }
                 None => {}
             }
@@ -400,6 +463,35 @@ fn on_local_player_moved_system(mut events: EventReader<PlayerMoved>) {
             pos.borrow_mut()
                 .from_game_vector(movement_event.pos, movement_event.rot);
         });
+    }
+}
+
+fn local_player_animation(
+    mut animation_query: Query<
+        (&AnimateNameTranslation, &mut Transform),
+        (With<Text>, With<AnimateNameTranslation>),
+    >,
+    players_query: Query<
+        (Entity, &Transform),
+        (
+            Without<AnimateNameTranslation>,
+            Or<(With<LocalPlayer>, With<RemotePlayer>)>,
+        ),
+    >,
+) {
+    for (animate_name_translation, mut animation_transform) in &mut animation_query {
+        // find the attached player
+        let attached_player = players_query
+            .iter()
+            .find(|(player_entity, player_transform)| {
+                animate_name_translation.0.eq(&player_entity)
+            });
+
+        // move the player text alongside with the transform coords of the entity
+        if let Some((attached_player_entity, attached_player_transform)) = attached_player {
+            animation_transform.translation.x = attached_player_transform.translation.x;
+            animation_transform.translation.y = attached_player_transform.translation.y;
+        }
     }
 }
 

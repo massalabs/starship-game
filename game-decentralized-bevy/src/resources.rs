@@ -65,6 +65,7 @@ pub enum RemoteStateType {
 pub struct RemoteGameState {
     pub entity_players: BTreeMap<String, Entity>, // uuid - game entity
     pub entity_collectibles: BTreeMap<String, Entity>, // uuid - game entity
+    pub entity_player_tags: BTreeMap<String, Entity>, // uuid - animation entity
     pub remote_players: BTreeMap<String, RemoteGamePlayerState>, //uuid - state mapping
     pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, //uuid - state mapping
 }
@@ -99,6 +100,7 @@ impl RemoteGameState {
     ) {
         self.remote_players.remove(uuid);
         self.entity_players.remove(uuid);
+        self.entity_player_tags.remove(uuid);
     }
 
     pub fn clear_remote_players(&mut self) {
@@ -141,6 +143,21 @@ impl RemoteGameState {
     pub fn clear_collectibles(&mut self) {
         self.remote_collectibles.clear();
     }
+    // ----------------------------------------------
+    pub fn add_new_player_tag(
+        &mut self,
+        uuid: &str,
+        entity: Entity,
+    ) -> Option<Entity> {
+        self.entity_player_tags.insert(uuid.to_owned(), entity)
+    }
+
+    pub fn get_player_tag_entity(
+        &self,
+        uuid: &str,
+    ) -> Option<&Entity> {
+        self.entity_player_tags.get(uuid)
+    }
 }
 
 impl Default for RemoteGameState {
@@ -148,6 +165,7 @@ impl Default for RemoteGameState {
         Self {
             entity_players: BTreeMap::new(),
             entity_collectibles: BTreeMap::new(),
+            entity_player_tags: BTreeMap::new(),
             remote_players: BTreeMap::new(),
             remote_collectibles: BTreeMap::new(),
         }

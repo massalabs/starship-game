@@ -1,5 +1,5 @@
 use bevy::math::Vec2;
-use bevy::prelude::{Component, Vec3};
+use bevy::prelude::{Component, Entity, Vec3};
 use bevy::time::Timer;
 
 #[derive(Component, Clone, Debug)]
@@ -23,13 +23,13 @@ pub struct Velocity {
 }
 
 #[derive(Component, Clone, Debug)]
-pub struct Collectible(pub String); // the uuid
+pub struct Collectible(pub String); // the external uuid
 
 #[derive(Component, Clone, Debug)]
 pub struct LocalPlayer;
 
 #[derive(Component, Clone, Debug)]
-pub struct RemotePlayer(pub String); // the uuid
+pub struct RemotePlayer(pub String); // the external uuid
 
 #[derive(Component)]
 pub struct ExplosionToSpawn(pub Vec3);
@@ -45,3 +45,6 @@ impl Default for ExplosionTimer {
         Self(Timer::from_seconds(0.05, true))
     }
 }
+
+#[derive(Component)]
+pub struct AnimateNameTranslation(pub Entity);
