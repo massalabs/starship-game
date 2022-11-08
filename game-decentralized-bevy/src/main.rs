@@ -17,7 +17,7 @@ use components::{
     Movable, RemotePlayer, SpriteSize, Velocity,
 };
 use errors::ClientError;
-use events::PlayerMoved;
+use events::{PlayerLaserEventData, PlayerMoved};
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use resources::{
     CollectedEntity, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState,
@@ -27,7 +27,7 @@ use rust_js_mappers::{
     get_key_value_from_obj, get_value_for_key, map_js_update_to_rust_entity_state,
 };
 use std::collections::HashSet;
-use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_POSITION};
+use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_LASERS, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
 
 pub mod components;
@@ -509,6 +509,7 @@ fn laser_movable_system(
     win_size: Res<WinSize>,
     mut query: Query<(Entity, &Velocity, &mut Transform, &Movable, &LocalLaser), With<LocalLaser>>,
 ) {
+    let mut serialized_lasers_data: Option<String> = None;
     for (entity, velocity, mut transform, movable, laser) in query.iter_mut() {
         // get the laser angle at which it was shot at
         let laser_start_position = laser.0;
@@ -519,7 +520,7 @@ fn laser_movable_system(
         transform.translation += movement_direction * velocity.linear * TIME_STEP;
 
         // do simple movement
-
+        let mut should_despawn = false;
         if movable.auto_despawn {
             // despawn when out of screen
             if transform.translation.y > win_size.h / 2.
@@ -527,10 +528,41 @@ fn laser_movable_system(
                 || transform.translation.x > win_size.w / 2.
                 || transform.translation.x < -win_size.w / 2.
             {
+                should_despawn = true;
                 commands.entity(entity).despawn();
             }
         }
+
+        // any entity that is not to be despawned, is to be serialized and added to the output
+        if !should_despawn {
+            let serialized_laser = serde_json::to_string(&PlayerLaserEventData {
+                player_uuid: "fsss".to_string(),
+                player_address: "fsss".to_string(),
+                laser_x: transform.translation.x as f64,
+                laser_y: transform.translation.y as f64,
+                laser_rot: transform.rotation.z as f64,
+                laser_w: transform.rotation.w as f64,
+            })
+            .ok();
+
+            // append the serialized data
+            if let Some(serialized_laser) = serialized_laser {
+                match serialized_lasers_data {
+                    Some(data) => {
+                        serialized_lasers_data = Some(format!("{}@{}", data, serialized_laser));
+                    }
+                    None => {
+                        serialized_lasers_data = Some(format!("{}", serialized_laser));
+                    }
+                }
+            }
+        }
     }
+
+    // send over the thread the entire lasers state to the users
+    LOCAL_PLAYER_LASERS.with(|pos| {
+        *pos.borrow_mut() = serialized_lasers_data;
+    });
 }
 
 fn player_tag_animation_system(

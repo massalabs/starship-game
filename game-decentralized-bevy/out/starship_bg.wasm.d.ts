@@ -6,6 +6,7 @@ export function get_player_x(): number;
 export function get_player_y(): number;
 export function get_player_rot(): number;
 export function get_player_w(): number;
+export function get_player_lasers(a: number): void;
 export function push_game_entity_updates(a: number, b: number): void;
 export function wgpu_render_pass_set_pipeline(a: number, b: number): void;
 export function wgpu_render_pass_set_bind_group(a: number, b: number, c: number, d: number, e: number): void;
@@ -68,6 +69,7 @@ export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen
 export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h37fabeacb1d3ff82(a: number, b: number): void;
 export function _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h93d75378dd53fde3(a: number, b: number): void;
 export function _dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd5691efbb88c4184(a: number, b: number, c: number): void;
+export function __wbindgen_add_to_stack_pointer(a: number): number;
 export function __wbindgen_free(a: number, b: number): void;
 export function __wbindgen_exn_store(a: number): void;
 export function __wbindgen_start(): void;

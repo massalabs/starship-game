@@ -46,3 +46,14 @@ pub struct CollectedEntityEventData {
     pub value: f64,
     pub time: f64,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerLaserEventData {
+    pub player_uuid: String,
+    pub player_address: String,
+    pub laser_x: f64,
+    pub laser_y: f64,
+    pub laser_rot: f64,
+    pub laser_w: f64,
+}

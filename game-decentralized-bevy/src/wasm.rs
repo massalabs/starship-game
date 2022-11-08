@@ -75,6 +75,20 @@ pub fn get_player_w() -> f32 {
 
 // ========================================================================================== //
 
+// Local single thread recording player lasers on every frame RUST -> JS
+thread_local!(pub static LOCAL_PLAYER_LASERS: RefCell<Option<String>> = RefCell::new(None));
+
+// a method callable from js to get player x lasers state (serialized)
+#[wasm_bindgen]
+pub fn get_player_lasers() -> Option<String> {
+    LOCAL_PLAYER_LASERS.with(|pos| {
+        let x = &*pos.borrow();
+        x.clone()
+    })
+}
+
+// ========================================================================================== //
+
 // A JS < -- > RUST mapped object
 #[wasm_bindgen(module = "src/app/GameEntity.ts")]
 extern "C" {

@@ -467,10 +467,11 @@ class WasmDappExample extends React.Component<IProps, IState> {
     }
 
     // get coors from wasm
-    const newX = game.get_player_x();
-    const newY = game.get_player_y();
-    const newRot = game.get_player_rot();
-    const newW = game.get_player_w();
+    const newX: number = game.get_player_x();
+    const newY: number = game.get_player_y();
+    const newRot: number = game.get_player_rot();
+    const newW: number = game.get_player_w();
+    const lasersState: string | undefined = game.get_player_lasers();
 
     // update coors state and then update blockchain
     this.setState((prevState: IState, prevProps: IProps) => {
@@ -479,6 +480,11 @@ class WasmDappExample extends React.Component<IProps, IState> {
       //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
       const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot, w: newW } as IPlayerOnchainEntity;
       await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
+
+      // TODO; update player lasers
+      if (lasersState) {
+        // SEND UPDATE TO BLOCKCHAIN
+      }
     });
 
     // set a new timeout
