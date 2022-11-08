@@ -13,8 +13,8 @@ use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 use bevy_debug_text_overlay::{screen_print, OverlayPlugin};
 use components::{
-    AnimateNameTranslation, Collectible, Explosion, ExplosionTimer, LocalPlayer, Movable,
-    RemotePlayer, SpriteSize, Velocity,
+    AnimateNameTranslation, Collectible, Explosion, ExplosionTimer, LocalLaser, LocalPlayer,
+    Movable, RemotePlayer, SpriteSize, Velocity,
 };
 use errors::ClientError;
 use events::PlayerMoved;
@@ -49,11 +49,16 @@ const SCREEN_HEIGHT: f32 = 500.0;
 const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 
 // player speeds
-const LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
-const LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
+const PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
+const PLAYER_LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
 
-const PLAYER_SPRITES: [(usize, &str); 2] =
-    [(1, "entities/local.v1.png"), (2, "entities/remote.v2.png")];
+// laser speeds
+const LASER_LINEAR_MOVEMENT_SPEED: f32 = 45.0; // linear speed in meters per second
+
+const PLAYER_SPRITES: [(&str, &str); 2] = [
+    ("local", "entities/local.v1.png"),
+    ("remote", "entities/remote.v2.png"),
+];
 const PLAYER_SIZE: (f32, f32) = (128., 128.);
 
 const BACKGROUND_SPRITE: &str = "entities/galaxy.png";
@@ -62,8 +67,13 @@ const BACKGROUND_SIZE: (f32, f32) = (1000., 50.);
 const COLLECTIBLE_SPRITE: &str = "entities/token.png";
 const COLLECTIBLE_SIZE: (f32, f32) = (50., 50.);
 
+const PLAYER_LASER_SPRITE: &str = "entities/laser_a_01.png";
+const PLAYER_LASER_SIZE: (f32, f32) = (9., 54.);
+
 const EXPLOSION_SHEET: &str = "entities/explo_a_sheet.png";
 const EXPLOSION_LEN: usize = 16;
+
+const SPRITE_SCALE: f32 = 0.5;
 
 fn main() {
     let mut app = App::new();
@@ -91,9 +101,10 @@ fn main() {
             .with_system(screen_print_text)
             .with_system(local_player_movement_system)
             .with_system(on_local_player_moved_system)
+            .with_system(laser_movable_system)
             .with_system(entities_from_blockchain_update_system)
             .with_system(interpolate_blockchain_entities_state_system)
-            .with_system(local_player_animation)
+            .with_system(player_tag_animation_system)
             .with_system(player_collectible_collision_system)
             .with_system(explosion_to_spawn_system)
             .with_system(explosion_animation_system),
@@ -128,10 +139,11 @@ fn setup_system(
     // load texture atlas and create a resource with Textures
     let background_texture = asset_server.load(BACKGROUND_SPRITE);
     let collectible_texture = asset_server.load(COLLECTIBLE_SPRITE);
+    let laser_texture = asset_server.load(PLAYER_LASER_SPRITE);
     let player_sprites = PLAYER_SPRITES
         .iter()
-        .map(|(index, s)| (*index, asset_server.load(*s)))
-        .collect::<HashMap<usize, Handle<Image>>>();
+        .map(|(index, s)| (index.to_string(), asset_server.load(*s)))
+        .collect::<HashMap<String, Handle<Image>>>();
 
     // create explosion texture atlas
     let texture_handle = asset_server.load(EXPLOSION_SHEET);
@@ -140,6 +152,7 @@ fn setup_system(
 
     let game_textures = GameTextures {
         player: player_sprites,
+        laser: laser_texture,
         collectible: collectible_texture.clone(),
         background: background_texture.clone(),
         explosion,
@@ -175,7 +188,8 @@ fn entities_from_blockchain_update_system(
                     match player_added.r#type {
                         EntityType::Local => {
                             // get texture for local player
-                            let player_texture = game_textures.player.get(&2).cloned().unwrap();
+                            let player_texture =
+                                game_textures.player.get("local").cloned().unwrap();
 
                             // spawn the local player
                             let local_player_entity = commands
@@ -191,12 +205,9 @@ fn entities_from_blockchain_update_system(
                                 })
                                 .insert(LocalPlayer)
                                 .insert(SpriteSize::from(PLAYER_SIZE))
-                                .insert(Movable {
-                                    auto_despawn: false,
-                                })
                                 .insert(Velocity {
-                                    linear: LINEAR_MOVEMENT_SPEED,
-                                    rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
+                                    linear: PLAYER_LINEAR_MOVEMENT_SPEED,
+                                    rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
                                 })
                                 .id();
 
@@ -212,10 +223,7 @@ fn entities_from_blockchain_update_system(
                                 .insert(AnimateNameTranslation(local_player_entity));
 
                             // add player tag to resources
-                            game_state.add_new_player_tag(
-                                &player_added.uuid,
-                                text2d_entity,
-                            );
+                            game_state.add_new_player_tag(&player_added.uuid, text2d_entity);
                         }
                         EntityType::Remote => {
                             // add player to state and spawn new entity only if new player uuid
@@ -224,7 +232,8 @@ fn entities_from_blockchain_update_system(
                                 .is_none()
                             {
                                 // get texture for remote player
-                                let player_texture = game_textures.player.get(&2).cloned().unwrap();
+                                let player_texture =
+                                    game_textures.player.get("remote").cloned().unwrap();
 
                                 // spawn a new player entity
                                 let spawned_remote_player_entity = commands
@@ -240,10 +249,9 @@ fn entities_from_blockchain_update_system(
                                     })
                                     .insert(RemotePlayer(player_added.uuid.clone()))
                                     .insert(SpriteSize::from(PLAYER_SIZE))
-                                    .insert(Movable { auto_despawn: true })
                                     .insert(Velocity {
-                                        linear: LINEAR_MOVEMENT_SPEED,
-                                        rotational: f32::to_radians(LINEAR_ROTATION_SPEED),
+                                        linear: PLAYER_LINEAR_MOVEMENT_SPEED,
+                                        rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
                                     })
                                     .id();
 
@@ -265,10 +273,7 @@ fn entities_from_blockchain_update_system(
                                 );
 
                                 // add player tag to resources
-                                game_state.add_new_player_tag(
-                                    &player_added.uuid,
-                                    text2d_entity,
-                                );
+                                game_state.add_new_player_tag(&player_added.uuid, text2d_entity);
                             }
                         }
                     }
@@ -282,7 +287,7 @@ fn entities_from_blockchain_update_system(
                         commands.entity(*entity_id).despawn();
                     }
 
-                    // despawn entity id
+                    // despawn tag entity id
                     if let Some(entity_id) =
                         game_state.get_player_tag_entity(&player_to_remove.uuid)
                     {
@@ -318,15 +323,16 @@ fn entities_from_blockchain_update_system(
                             })
                             .insert(Collectible(state.uuid.clone()))
                             .insert(SpriteSize::from(COLLECTIBLE_SIZE))
-                            .insert(Movable { auto_despawn: true })
                             .id()
                     };
 
+                    // add token state
                     game_state.add_new_collectible(&token_added.uuid, token_added.clone());
                     let entity_id = spawn_collectible_closure(
                         game_textures.collectible.clone(),
                         token_added.clone(),
                     );
+                    // add token entity
                     game_state.add_new_collectible_entity(&token_added.uuid, entity_id);
                 }
                 Some(RemoteStateType::TokenRemoved(RemoteCollectibleState { uuid, .. }))
@@ -335,7 +341,7 @@ fn entities_from_blockchain_update_system(
                     if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
                         // despawn the remote collectible entity
                         commands.entity(*entity_id).despawn();
-                        // remove token from all collection states
+                        // remove token state and entity from all collections
                         game_state.remove_collectible(&uuid);
                     }
                 }
@@ -403,7 +409,7 @@ fn player_collectible_collision_system(
 
             // perform collision
             if let Some(_) = collision {
-                info!("COLLISION: Entity UUID {:?}", &collectible_id.0);
+                //info!("COLLISION: Entity UUID {:?}", &collectible_id.0);
                 // remove the collectible
                 commands.entity(collectible_entity).despawn();
                 despawned_entities.insert(collectible_entity);
@@ -420,7 +426,9 @@ fn player_collectible_collision_system(
 }
 
 fn local_player_movement_system(
+    mut commands: Commands,
     time: Res<Time>,
+    game_textures: Res<GameTextures>,
     mut player_moved_events: EventWriter<PlayerMoved>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(&Velocity, &mut Transform), With<LocalPlayer>>,
@@ -448,6 +456,36 @@ fn local_player_movement_system(
         let extents = Vec3::from((BOUNDS / 2.0, 0.0));
         transform.translation = transform.translation.clamp(-extents, extents);
 
+        // if space is pressed, shoot laser
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            let laser_texture = game_textures.laser.clone();
+            commands
+                .spawn_bundle(SpriteBundle {
+                    texture: laser_texture,
+                    transform: Transform {
+                        translation: Vec3::new(
+                            transform.translation.x,
+                            transform.translation.y,
+                            0.,
+                        ),
+                        rotation: transform.rotation.clone(),
+                        scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .insert(LocalLaser((
+                    transform.translation.clone(),
+                    transform.rotation.clone(),
+                )))
+                .insert(SpriteSize::from(PLAYER_LASER_SIZE))
+                .insert(Movable { auto_despawn: true })
+                .insert(Velocity {
+                    linear: LASER_LINEAR_MOVEMENT_SPEED,
+                    rotational: f32::to_radians(0.0),
+                });
+        }
+
         // send message about player translation
         player_moved_events.send(PlayerMoved {
             pos: transform.translation,
@@ -466,7 +504,36 @@ fn on_local_player_moved_system(mut events: EventReader<PlayerMoved>) {
     }
 }
 
-fn local_player_animation(
+fn laser_movable_system(
+    mut commands: Commands,
+    win_size: Res<WinSize>,
+    mut query: Query<(Entity, &Velocity, &mut Transform, &Movable, &LocalLaser), With<LocalLaser>>,
+) {
+    for (entity, velocity, mut transform, movable, laser) in query.iter_mut() {
+        // get the laser angle at which it was shot at
+        let laser_start_position = laser.0;
+        transform.rotation = laser_start_position.1;
+
+        // extrapolate the position
+        let movement_direction = transform.rotation * Vec3::Y;
+        transform.translation += movement_direction * velocity.linear * TIME_STEP;
+
+        // do simple movement
+
+        if movable.auto_despawn {
+            // despawn when out of screen
+            if transform.translation.y > win_size.h / 2.
+                || transform.translation.y < -win_size.h / 2.
+                || transform.translation.x > win_size.w / 2.
+                || transform.translation.x < -win_size.w / 2.
+            {
+                commands.entity(entity).despawn();
+            }
+        }
+    }
+}
+
+fn player_tag_animation_system(
     mut animation_query: Query<
         (&AnimateNameTranslation, &mut Transform),
         (With<Text>, With<AnimateNameTranslation>),

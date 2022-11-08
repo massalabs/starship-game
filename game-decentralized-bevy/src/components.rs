@@ -1,5 +1,5 @@
 use bevy::math::Vec2;
-use bevy::prelude::{Component, Entity, Vec3};
+use bevy::prelude::{Component, Entity, Quat, Vec3};
 use bevy::time::Timer;
 
 #[derive(Component, Clone, Debug)]
@@ -48,3 +48,6 @@ impl Default for ExplosionTimer {
 
 #[derive(Component)]
 pub struct AnimateNameTranslation(pub Entity);
+
+#[derive(Component)]
+pub struct LocalLaser(pub (Vec3, Quat));

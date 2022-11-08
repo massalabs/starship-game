@@ -46,7 +46,7 @@ pub fn spawn_player_name_text2d_entity(
             text: Text::from_section(player_name, text_style),
             text_2d_bounds: Text2dBounds { size: box_size },
             transform: Transform::from_xyz(
-                box_position.x - box_size.x / 2.0,
+                box_position.x - box_size.x / 2.0 + 35.0,
                 box_position.y + box_size.y / 2.0,
                 2.0,
             ),

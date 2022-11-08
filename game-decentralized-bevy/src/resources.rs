@@ -5,7 +5,8 @@ use wasm_bindgen::JsValue;
 
 #[derive(Debug, Clone)]
 pub struct GameTextures {
-    pub player: HashMap<usize, Handle<Image>>,
+    pub player: HashMap<String, Handle<Image>>,
+    pub laser: Handle<Image>,
     pub collectible: Handle<Image>,
     pub background: Handle<Image>,
     pub explosion: Handle<TextureAtlas>,
@@ -105,6 +106,14 @@ impl RemoteGameState {
 
     pub fn clear_remote_players(&mut self) {
         self.remote_players.clear();
+    }
+
+    pub fn get_remote_players_count(&self) -> usize {
+        self.remote_players.len()
+    }
+
+    pub fn get_entity_players_count(&self) -> usize {
+        self.entity_players.len()
     }
 
     // ----------------------------------------
