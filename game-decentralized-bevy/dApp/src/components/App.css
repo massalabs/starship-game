@@ -73,3 +73,30 @@
   }
 }
 
+.react-scrollable-list {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  height: 200px;
+  width: 700px;
+  overflow-y: scroll;
+  border: #ddd solid 1px;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+}
+
+.react-scrollable-list-item {
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 5px;
+  background-color: #f2f2f2;
+  border-bottom: #ddd solid 1px;
+  pointer-events: none;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+}
+

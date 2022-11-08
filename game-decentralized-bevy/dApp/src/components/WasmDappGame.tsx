@@ -134,7 +134,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
       }
       if (!isError) {
         toast(`Wasm Loaded!`,{
-          className: "toast"
+          className: "toast",
+          type: "success"
         });
       }
 
@@ -253,7 +254,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
         this.updateSelfBlockchainPosition();
         this.readSelfBlockchainPosition();
         toast(`Ready GO!`,{
-          className: "toast"
+          className: "toast",
+          type: "success"
         });
       });
     }

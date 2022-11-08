@@ -15,13 +15,14 @@ import { IPlayerOnchainEntity } from "../entities/PlayerEntity";
 import { registerPlayer, isPlayerRegistered, getPlayerPos } from "../gameMethods";
 import { generateThreadAddressesMap, getProviderUrl, networks, networkValues } from "../utils/massa";
 import { Navigate } from "react-router-dom";
+import ReactScrollableList from 'react-scrollable-list';
 
 const style = {
   position: 'absolute' as 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  height: 600,
+  height: 800,
   bgcolor: 'background.paper',
   border: '2px solid #000',
   boxShadow: 24,
@@ -279,9 +280,27 @@ export default class RegisterPlayer extends Component<IProps, IState> {
                     </div>
                   </Box>
               </div>
+
+              <div>
+              <Box
+                component="form"
+                sx={{
+                  '& .MuiTextField-root': { m: 1, width: '40ch' },
+                }}
+                noValidate
+                autoComplete="off"
+              >
+                <ReactScrollableList
+                    listItems={[{ id: 1, content: "executor addresses" }]}
+                    heightOfItem={10}
+                    maxItemsToRender={4}
+                    style={{ color: '#333', textAlign: 'center', justifyContent: 'center', alignItems: 'center' }}
+                  />
+              </Box>
+              </div>
+              <hr />
               <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>Register Player</Button>
             </Box>
-
           </Modal>
           <ToastContainer />
         </React.Fragment>
