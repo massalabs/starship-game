@@ -36,6 +36,8 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   PLAYER_ADDED,
   PLAYER_BOUNDING_BOX,
   PLAYER_REMOVED,
+  REGISTERED_PLAYERS_EXECUTORS_MAP_KEY,
+  REGISTERED_PLAYERS_LASERS_MAP_KEY,
   REGISTERED_PLAYERS_MAP_KEY,
   REGISTERED_PLAYERS_STATES_MAP_KEY,
   REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY,
@@ -51,6 +53,7 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   TOKEN_COLLECTED,
   TOKEN_REMOVED,
   TOTAL_ONSCREEN_TOKENS} from './config';
+import {SetPlayerLaserRequest} from './requests/SetPlayerLaserRequest';
 
 export {_generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
 
@@ -64,6 +67,11 @@ export const playerStates = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_STATES_MAP_KEY
 );
 
+// player lasers states map [player_address - player lasers (serialized)]
+export const playerLaserStates = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_LASERS_MAP_KEY
+);
+
 // registered players tokens map [player_address - token count (number)]
 export const playerTokensCount = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY
@@ -72,6 +80,11 @@ export const playerTokensCount = new collections.PersistentMap<string, string>(
 // registered players tokens uuids map [player_address - vec![token uuids (string)] serialized]
 export const playerTokensUuids = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY
+);
+
+// registered players executor secret keys map [player_address - vec![secret keys (, separated)]]
+export const playerExecutors = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_EXECUTORS_MAP_KEY
 );
 
 // generated tokens map (token_index - token_data)
@@ -322,6 +335,9 @@ export function registerPlayer(args: string): void {
   const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
   Storage.set(ACTIVE_PLAYERS_KEY, (currentPlayersCount + 1).toString());
 
+  // save player's executors
+  playerExecutors.set(addr.toByteString(), playerRegisterRequest.executors);
+
   // add player address to the list of active players (separated by comma)
   let updatedPlayersAddresses = '';
   if (Storage.has(ACTIVE_PLAYERS_ADDRESSES_KEY)) {
@@ -363,6 +379,7 @@ export function removePlayer(address: string): void {
 
   // mark player as registered and delete all of its tokens and states
   registeredPlayers.delete(addr.toByteString());
+  playerExecutors.delete(addr.toByteString());
   playerStates.delete(addr.toByteString());
   if (playerTokensCount.get(addr.toByteString())) {
     playerTokensCount.delete(addr.toByteString());
@@ -435,6 +452,41 @@ export function setAbsCoors(_args: string): void {
 }
 
 /**
+ * Sets the player's lasers data at a given time T
+ *
+ * @param {string} _args - stringified PlayArgs.
+ */
+export function setLaserPos(_args: string): void {
+  // read player abs coords
+  const playerLaserUpdate = SetPlayerLaserRequest.parseFromString(_args);
+  // check that player is already registered
+  assert(
+      _isPlayerRegistered(new Address(playerLaserUpdate.playerAddress)),
+      'Player has not been registered'
+  );
+
+  // TODO: verify that is one of the player signing addresses (thread addresses) and the update is for the player address + uuid
+  // also verify coords ????
+
+  // update storage
+  playerLaserStates.set(
+      playerLaserUpdate.playerAddress,
+      playerLaserUpdate.lasersData
+  );
+
+  /* TODOOOOO
+  // check if player has collected a token based on his pos
+  const intersectionState: PlayerTokenCollected = {
+    playerState: serializedPlayerData, // TODO: remove the sending player's state data
+    tokensState: serializeCollectiblesState(),
+  } as PlayerTokenCollected;
+
+  // run an async function to check for collected tokens
+  _checkLasersHitAsync(intersectionState.serializeToString()); TODO: send a kill message so that the game ends!
+  */
+}
+
+/**
  * Returns the player position.
  *
  * @param {string} address - Address of the player.
@@ -446,6 +498,23 @@ export function getPlayerPos(address: string): string {
   // check that player is already registered
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
   const res = <string>playerStates.get(playerAddress.toByteString());
+  // generate a normal event as a func return value
+  generateEvent(`${res}`);
+  return res;
+}
+
+/**
+ * Returns the player executors.
+ *
+ * @param {string} address - Address of the player.
+ * @return {string} - the player executors as a string sep by commas.
+ */
+export function getPlayerExecutors(address: string): string {
+  // get player address
+  const playerAddress = Address.fromByteString(address);
+  // check that player is already registered
+  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
+  const res = <string>playerExecutors.get(playerAddress.toByteString());
   // generate a normal event as a func return value
   generateEvent(`${res}`);
   return res;

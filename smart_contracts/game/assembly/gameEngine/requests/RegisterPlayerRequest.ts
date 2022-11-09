@@ -6,6 +6,7 @@ import {JSON} from 'json-as/assembly';
 export class RegisterPlayerRequest {
   address: string = '';
   name: string = '';
+  executors: string = '';
 
   serializeToString(): string {
     const stringified = JSON.stringify<RegisterPlayerRequest>(this);

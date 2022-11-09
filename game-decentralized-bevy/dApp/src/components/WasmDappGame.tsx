@@ -87,10 +87,10 @@ class WasmDappExample extends React.Component<IProps, IState> {
       playerGameState: null,
       playerBalance: 0,
       playerTokens: 0,
-      playerAddress: propState.playerAddress,
-      playerName: propState.playerName,
-      playerSecretKey: propState.playerSecretKey,
-      gameAddress: propState.gameAddress,
+      playerAddress: propState.playerAddress as string,
+      playerName: propState.playerName as string,
+      playerSecretKey: propState.playerSecretKey as string,
+      gameAddress: propState.gameAddress as string,
       activePlayers: 0,
       maxPlayers: 0,
     };
@@ -472,6 +472,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
     const newRot: number = game.get_player_rot();
     const newW: number = game.get_player_w();
     const lasersState: string | undefined = game.get_player_lasers();
+    console.log(lasersState)
 
     // update coors state and then update blockchain
     this.setState((prevState: IState, prevProps: IProps) => {

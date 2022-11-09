@@ -1,8 +1,8 @@
-import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData } from "@massalabs/massa-web3";
+import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./entities/PlayerEntity";
 import { ITokenOnchainEntity } from "./entities/TokenEntity";
 
-export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {
+export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string): Promise<IPlayerOnchainEntity> => {
     const callTxIds = await web3Client.smartContracts().callSmartContract({
       fee: 0,
       gasPrice: 0,
@@ -11,7 +11,7 @@ export const registerPlayer = async (web3Client: Client, gameAddress: string, pl
       sequentialCoins: 0,
       targetAddress: gameAddress,
       functionName: "registerPlayer",
-      parameter: `{"name":"${playerName}","address":"${playerAddress}"}`,
+      parameter: `{"name":"${playerName}","address":"${playerAddress}", "executors":"${executors}"}`,
     } as ICallData);
     const callScOperationId = callTxIds[0];
   
@@ -72,6 +72,35 @@ export const getPlayerPos = async (web3Client: Client, gameAddress: string, play
     return playerEntity as IPlayerOnchainEntity;
 }
 
+export const getPlayerExecutors = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Map<number, IAccount>> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getPlayerExecutors",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+
+  const eventData = readTxData[0].output_events[0].data;
+  let playerExecutors: Array<string> = [];
+  try {
+    playerExecutors = eventData.split(",");
+  } catch (ex) {
+      console.error("Error splitting data for player executors", eventData);
+      throw ex;
+  }
+
+  let threadAddressesMap = new Map<number, IAccount>();
+  for (const executorSecretKey of playerExecutors) {
+    const executorAccount = await WalletClient.getAccountFromSecretKey(executorSecretKey);
+    threadAddressesMap.set(executorAccount.createdInThread as number, executorAccount);
+  }
+
+  return threadAddressesMap;
+}
+
 export const getPlayerCandidatePositionFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity|null> => {
   let scStorageData: IContractStorageData[] = [];
   try {
@@ -108,7 +137,6 @@ export const isPlayerRegistered = async (web3Client: Client, gameAddress: string
     } as IReadData);
     console.log("Is Player Registered ? ", readTxData);
     const isRegistered = readTxData[0].output_events[0].data.toLowerCase() === "true" ? true : false;
-
     return isRegistered;
 }
 

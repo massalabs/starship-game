@@ -12,7 +12,7 @@ import MenuItem from '@mui/material/MenuItem';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "../entities/PlayerEntity";
-import { registerPlayer, isPlayerRegistered, getPlayerPos } from "../gameMethods";
+import { registerPlayer, isPlayerRegistered, getPlayerPos, getPlayerExecutors } from "../gameMethods";
 import { generateThreadAddressesMap, getProviderUrl, networks, networkValues } from "../utils/massa";
 import { Navigate } from "react-router-dom";
 import ReactScrollableList from 'react-scrollable-list';
@@ -35,10 +35,10 @@ const style = {
 interface IProps {}
 
 export interface IPropState {
-  gameAddress: string;
-  playerSecretKey: string;
-  playerAddress: string;
-  playerName: string;
+  gameAddress: string|undefined;
+  playerSecretKey: string|undefined;
+  playerAddress: string|undefined;
+  playerName: string|undefined;
   networkName: string;
   isPlayerRegistered: boolean;
   threadAddressesMap: Object;
@@ -55,10 +55,10 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     super(props);
 
     this.state = {
-      playerAddress: 'N/A',
-      gameAddress: "",
-      playerSecretKey: "",
-      playerName: "N/A",
+      playerAddress: '',
+      gameAddress: '',
+      playerSecretKey: '',
+      playerName: '',
       networkName: networks.IMMONET.value,
       showModal: true,
       isPlayerRegistered: false,
@@ -69,6 +69,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     this.showModal = this.showModal.bind(this);
     this.hideModal = this.hideModal.bind(this);
     this.registerPlayerAndOpenGame = this.registerPlayerAndOpenGame.bind(this);
+    this.checkForRegisteredPlayer = this.checkForRegisteredPlayer.bind(this);
     this.handleGameAddressChange = this.handleGameAddressChange.bind(this);
     this.handlePlayerSecretKeyChange = this.handlePlayerSecretKeyChange.bind(this);
     this.handleNetworkChange = this.handleNetworkChange.bind(this);
@@ -99,6 +100,8 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       that.setState({ playerAddress: account });
     })
     .catch((ex) => {
+      //console.error(ex);
+      that.setState({ playerAddress: "wrong secret key" });
     })
   };
 
@@ -110,13 +113,36 @@ export default class RegisterPlayer extends Component<IProps, IState> {
 
   }
 
-  async registerPlayerAndOpenGame(): Promise<void> {
+  async checkForRegisteredPlayer(): Promise<void> {
 
-    this.setState({
-      isRegisteringPlayer: true,
-      showModal: false
-    })
-
+    if (!this.state.playerSecretKey || !this.state.playerSecretKey.startsWith("S")) {
+      toast(`Bad secret key found. Please add one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.playerAddress || !this.state.playerAddress.startsWith("A")) {
+      toast(`Bad player address found. Please add a legit secret key`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.networkName) {
+      toast(`No network name found. Please select one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.gameAddress || !this.state.gameAddress.startsWith("A")) {
+      toast(`Bad game address found. Please add a correct one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
     // create a new base account
     let web3Client: Client|undefined = undefined;
     let baseAccount: IAccount|undefined = undefined;
@@ -126,19 +152,6 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     } catch (ex) {
       console.error(`Error loading web3 client`, ex);
     }
-    toast(`Massa Web3 Loaded!`,{
-      className: "toast",
-      type: "success"
-    });
-
-    // generate thread addresses map // TODO: only generate once for new players and update sc
-    let threadAddressesMap: Map<number, IAccount> = new Map();
-    try {
-      threadAddressesMap = await generateThreadAddressesMap(web3Client as Client);
-    } catch (ex) {
-      console.error(`Error generating thread addresses map`, ex);
-    }
-    console.log("Thread map generated!");
 
     // check if player is registered
     let hasPlayerRegistered: boolean = false;
@@ -149,24 +162,10 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       this.setState({ isRegisteringPlayer: false });
     }
 
-    // register player if necessary
     let playerEntity: IPlayerOnchainEntity|undefined = undefined;
-    if (!hasPlayerRegistered) {
-      try {
-        playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress);
-        toast(`Player Just Registered!`,{
-          className: "toast",
-          type: "success"
-        });
-      } catch (ex) {
-        console.error("Error registering player...", ex);
-        this.setState({ isRegisteringPlayer: false });
-        toast(`Error checking for registered player ${(ex as Error).message}!`,{
-          className: "toast",
-          type: "error"
-        });
-      }
-    } else {
+    let threadAddressesMap = new Map<number, IAccount>();
+    if (hasPlayerRegistered) {
+      // get player position
       try {
         playerEntity = await getPlayerPos(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
         toast(`Player Already Registered!`,{
@@ -174,9 +173,164 @@ export default class RegisterPlayer extends Component<IProps, IState> {
           type: "success"
         });
       } catch (ex) {
+        console.error("Error fetching chain data...", ex);
+        toast(`Error fetching player chain data ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
+      }
+      // get player executors
+      try {
+        threadAddressesMap = await getPlayerExecutors(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting player executors...", ex);
+        toast(`Error getting player executors ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
+      }
+    } else {
+      toast(`Player is not registered!`,{
+        className: "warning",
+        type: "warning"
+      });
+    }
+ 
+    // update react state
+    if (playerEntity) {
+      this.setState({
+        playerName: playerEntity.name,
+        threadAddressesMap: Object.fromEntries(threadAddressesMap) 
+      });
+    }
+  }
+
+  async registerPlayerAndOpenGame(): Promise<void> {
+
+    if (!this.state.playerSecretKey || !this.state.playerSecretKey.startsWith("S")) {
+      toast(`Bad secret key found. Please add one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.playerAddress || !this.state.playerAddress.startsWith("A")) {
+      toast(`Bad player address found. Please add a legit secret key`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.networkName) {
+      toast(`No network name found. Please select one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.gameAddress || !this.state.gameAddress.startsWith("A")) {
+      toast(`Bad game address found. Please add a correct one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+    if (!this.state.playerName) {
+      toast(`No player name given. Please add one`,{
+        className: "toast",
+        type: "error"
+      });
+      return;
+    }
+
+    // create a new base account
+    let web3Client: Client|undefined = undefined;
+    let baseAccount: IAccount|undefined = undefined;
+    try {
+      baseAccount = await WalletClient.getAccountFromSecretKey(this.state.playerSecretKey);
+      web3Client = await ClientFactory.createCustomClient(getProviderUrl(this.state.networkName), true, baseAccount);
+    } catch (ex) {
+      console.error(`Error loading web3 client`, ex);
+      return;
+    }
+    toast(`Massa Web3 Loaded!`,{
+      className: "toast",
+      type: "success"
+    });
+
+    // check if player is registered
+    let hasPlayerRegistered: boolean = false;
+    try {
+      hasPlayerRegistered = await isPlayerRegistered(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+    } catch (ex) {
+      console.error("Error getting is player registered...", ex);
+      this.setState({ isRegisteringPlayer: false });
+      return;
+    }
+
+    // register player if necessary
+    let playerEntity: IPlayerOnchainEntity|undefined = undefined;
+    let threadAddressesMap: Map<number, IAccount> = new Map();
+
+    // if brand new player
+    if (!hasPlayerRegistered) {
+
+      // generate thread addresses map
+      try {
+        threadAddressesMap = await generateThreadAddressesMap(web3Client as Client);
+      } catch (ex) {
+        console.error(`Error generating thread addresses map`, ex);
+        return;
+      }
+
+      console.log("Thread map generated!");
+      toast(`Player Thread Executors generated!`,{
+        className: "toast",
+        type: "success"
+      });
+
+      // hide the modal and start registering player
+      this.setState({
+        isRegisteringPlayer: true,
+        showModal: false
+      })
+
+      // register the player
+      try {
+        const executorsSecretKeys = Object.values(Object.fromEntries(threadAddressesMap)).map(item => item.secretKey).join(',');
+        playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress, executorsSecretKeys);
+        toast(`Player Just Registered!`,{
+          className: "toast",
+          type: "success"
+        });
+      } catch (ex) {
         console.error("Error registering player...", ex);
         this.setState({ isRegisteringPlayer: false });
         toast(`Error registering player ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
+      }
+    } else { // player exists
+      // get player position
+      try {
+        playerEntity = await getPlayerPos(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting player position...", ex);
+        this.setState({ isRegisteringPlayer: false });
+        toast(`Error getting player position ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
+      }
+
+      // get player executors
+      try {
+        threadAddressesMap = await getPlayerExecutors(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
+      } catch (ex) {
+        console.error("Error getting player executors...", ex);
+        this.setState({ isRegisteringPlayer: false });
+        toast(`Error getting player executors ${(ex as Error).message}!`,{
           className: "toast",
           type: "error"
         });
@@ -213,7 +367,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
           >
 
             <Box sx={{ ...style, width: 700 }}>
-              <h2 id="child-modal-title">Enter game</h2>
+              <h2 id="child-modal-title">Enter Massa Starship</h2>
               <p id="child-modal-description">
                 Please either register a new player or select an registered one
               </p>
@@ -291,15 +445,21 @@ export default class RegisterPlayer extends Component<IProps, IState> {
                 autoComplete="off"
               >
                 <ReactScrollableList
-                    listItems={[{ id: 1, content: "executor addresses" }]}
+                    listItems={Object.entries(this.state.threadAddressesMap).map(entry => {
+                      return { id: entry[0], content: entry[1].address }
+                    })}
                     heightOfItem={10}
-                    maxItemsToRender={4}
+                    maxItemsToRender={10}
                     style={{ color: '#333', textAlign: 'center', justifyContent: 'center', alignItems: 'center' }}
                   />
               </Box>
               </div>
-              <hr />
-              <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>Register Player</Button>
+              <div>
+                <Button variant="contained" onClick={this.checkForRegisteredPlayer} color='success'>Check Player</Button>
+              </div>
+              <div>
+                <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>Register Player</Button>
+              </div>
             </Box>
           </Modal>
           <ToastContainer />

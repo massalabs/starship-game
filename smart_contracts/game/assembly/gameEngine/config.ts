@@ -4,8 +4,10 @@ import {Amount} from '@massalabs/as/assembly';
 // ------------------------- storage keys -------------------------
 export const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
 export const REGISTERED_PLAYERS_STATES_MAP_KEY = 'registered_players_states_key';
+export const REGISTERED_PLAYERS_LASERS_MAP_KEY = 'registered_players_lasers_key';
 export const REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY = 'registered_players_token_counts_key';
 export const REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY = 'registered_players_token_uuids_key';
+export const REGISTERED_PLAYERS_EXECUTORS_MAP_KEY = 'registered_players_executors_key';
 export const GENERATED_TOKENS_MAP_KEY = 'generated_tokens_key';
 export const OWNER_ADDRESS_KEY = 'owner_key';
 export const LAST_SLOT_INDEX_KEY = 'last_slot_index_key';

@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12dz5QxyVn3Dakq6G1kHM8S3uEoGTTSRW4HVwHikXQb8VGR1w2";
+        const scAddress = "A126cSBBKDr2eFuSpNe67KfvZunyTAdvEXHH3EFhkSAYbMft8AvB";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
