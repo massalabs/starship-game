@@ -39,6 +39,7 @@ export interface IPropState {
   playerSecretKey: string|undefined;
   playerAddress: string|undefined;
   playerName: string|undefined;
+  playerUuid: string|undefined;
   networkName: string;
   isPlayerRegistered: boolean;
   threadAddressesMap: Object;
@@ -59,6 +60,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       gameAddress: '',
       playerSecretKey: '',
       playerName: '',
+      playerUuid: '',
       networkName: networks.IMMONET.value,
       showModal: true,
       isPlayerRegistered: false,
@@ -200,6 +202,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     if (playerEntity) {
       this.setState({
         playerName: playerEntity.name,
+        playerUuid: playerEntity.uuid,
         threadAddressesMap: Object.fromEntries(threadAddressesMap) 
       });
     }
@@ -342,6 +345,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       this.setState((prevState: IState, _prevProps: IProps) => {
         return { ...prevState,
               showModal: false,
+              playerUuid: playerEntity?.uuid,
               isPlayerRegistered: true,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
               isRegisteringPlayer: false

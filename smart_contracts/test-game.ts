@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A126cSBBKDr2eFuSpNe67KfvZunyTAdvEXHH3EFhkSAYbMft8AvB";
+        const scAddress = "A12NcnSa1xQayrsgBb7MQPThRFgMdKRJrpak1P7GaNULo9mvULKi";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -95,7 +95,7 @@ import { IDatastoreEntryInput,
         // ============================================
 
         // remove player
-        
+        /*
         console.log(`Calling smart contract function...`);
         const callTxId = await web3Client.smartContracts().callSmartContract({
             fee: 0,
@@ -123,7 +123,7 @@ import { IDatastoreEntryInput,
         } as IEventFilter, web3Client);
 
         console.log("REMOVE PLAYER EVENTS ", events);
-        
+        */
 
         // ========================================================================= 
 
@@ -382,6 +382,24 @@ import { IDatastoreEntryInput,
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         */
+
+        // ===========================GET PLAYER LASERS========================== 
+
+        // get player lasers
+        
+        console.log(`Reading a smart contract state...`);
+        const readTxId = await web3Client.smartContracts().readSmartContract({
+            fee: 0,
+            maxGas: 200000,
+            simulatedGasPrice: 0,
+            targetAddress: scAddress,
+            targetFunction: "getPlayerLasers",
+            parameter: playerAddress,
+            callerAddress: playerAddress
+        } as IReadData);
+        console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
+        console.log("DATA ", readTxId[0].output_events[0].data);
+        
 
     } catch (ex) {
         const msg = console.log(`Error = ${(ex as Error).message}`);

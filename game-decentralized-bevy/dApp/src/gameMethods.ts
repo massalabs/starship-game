@@ -1,5 +1,6 @@
 import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./entities/PlayerEntity";
+import { IPlayerLasersRequest } from "./entities/PlayerLasers";
 import { ITokenOnchainEntity } from "./entities/TokenEntity";
 
 export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string): Promise<IPlayerOnchainEntity> => {
@@ -281,6 +282,47 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         functionName: "setAbsCoors",
         /// Parameter to pass to the target function
         parameter: formatNumbersToDecimalPrecision(playerUpdate)
+      } as ICallData, executor as IAccount);
+    } catch (ex) {
+      console.error(`Error setting object coords to sc`, ex);
+      throw ex;
+    }
+    //console.log("Updated Blockchain Coords OP_ID", opIds);
+    return opIds ? opIds[0] : undefined;
+  }
+
+  export const setPlayerLaserOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
+     // evaluate thread from which to send
+    let nodeStatusInfo: INodeStatus|null|undefined = null;
+    try {
+      nodeStatusInfo = await web3Client.publicApi().getNodeStatus();
+    } catch(ex) {
+      console.log("Error getting node status");
+      throw ex;
+    }
+
+    const threadForNextOp = ((nodeStatusInfo as INodeStatus).next_slot.thread + 2) % (nodeStatusInfo as INodeStatus).config.thread_count;
+    //console.log("Next thread to execute op with = ", threadForNextOp);
+    const executor = threadAddressesMap.get(threadForNextOp.toString());
+    let opIds;
+    try {
+      opIds = await web3Client?.smartContracts().callSmartContract({
+        /// storage fee for taking place in books
+        fee: 0,
+        /// The maximum amount of gas that the execution of the contract is allowed to cost.
+        maxGas: 200000,
+        /// The price per unit of gas that the caller is willing to pay for the execution.
+        gasPrice: 0,
+        /// Extra coins that are spent from the caller's parallel balance and transferred to the target
+        parallelCoins: 0,
+        /// Extra coins that are spent from the caller's sequential balance and transferred to the target
+        sequentialCoins: 0,
+        /// Target smart contract address
+        targetAddress: gameAddress,
+        /// Target function name. No function is called if empty.
+        functionName: "setLaserPos",
+        /// Parameter to pass to the target function
+        parameter: formatNumbersToDecimalPrecision(playerLasersUpdate)
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);

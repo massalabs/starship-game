@@ -10,7 +10,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "../entities/PlayerEntity";
-import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerPositionOnchain } from "../gameMethods";
+import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerLaserOnchain, setPlayerPositionOnchain } from "../gameMethods";
 import { IGameEvent } from "../entities/GameEvent";
 import { PollTimeout, wait } from "../utils/time";
 import { getProviderUrl } from "../utils/massa";
@@ -22,6 +22,7 @@ import withRouter from "../utils/withRouter";
 import Button from '@mui/material/Button';
 import { ICollectedTokenOnchainEntity } from "../entities/CollectedTokenEntity";
 import { parseJson } from "../utils/utils";
+import { IPlayerLasersRequest } from "../entities/PlayerLasers";
 
 // game player events
 const PLAYER_MOVED = "PLAYER_MOVED";
@@ -51,6 +52,7 @@ export interface IState {
   networkName: string;
   playerSecretKey: string;
   playerAddress: string;
+  playerUuid: string;
   playerBalance: number;
   playerTokens: number;
   playerName: string;
@@ -88,6 +90,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
       playerBalance: 0,
       playerTokens: 0,
       playerAddress: propState.playerAddress as string,
+      playerUuid: propState.playerUuid as string,
       playerName: propState.playerName as string,
       playerSecretKey: propState.playerSecretKey as string,
       gameAddress: propState.gameAddress as string,
@@ -471,8 +474,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
     const newY: number = game.get_player_y();
     const newRot: number = game.get_player_rot();
     const newW: number = game.get_player_w();
-    const lasersState: string | undefined = game.get_player_lasers();
-    console.log(lasersState)
+    const lasersState: string | undefined = game.get_player_lasers(); // "{...laser1}@{...laser2}@{...laser3}""
 
     // update coors state and then update blockchain
     this.setState((prevState: IState, prevProps: IProps) => {
@@ -480,12 +482,18 @@ class WasmDappExample extends React.Component<IProps, IState> {
     }, async () => {
       //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
       const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot, w: newW } as IPlayerOnchainEntity;
+
+      // update players position onchain
       await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
 
-      // TODO; update player lasers
-      if (lasersState) {
-        // SEND UPDATE TO BLOCKCHAIN
-      }
+      // now update player lasers
+      // send update to blockchain
+      await setPlayerLaserOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, {
+        playerAddress: this.state.playerAddress,
+        playerUuid: this.state.playerUuid,
+        lasersData: lasersState ? lasersState : "", // pass the game state directly to the smart contract
+        time: (new Date()).getTime()
+      } as IPlayerLasersRequest);
     });
 
     // set a new timeout

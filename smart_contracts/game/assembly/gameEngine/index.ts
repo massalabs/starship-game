@@ -504,6 +504,23 @@ export function getPlayerPos(address: string): string {
 }
 
 /**
+ * Returns the player lasers state.
+ *
+ * @param {string} address - Address of the player.
+ * @return {string} - the player lasers state (stringified).
+ */
+export function getPlayerLasers(address: string): string {
+  // get player address
+  const playerAddress = Address.fromByteString(address);
+  // check that player is already registered
+  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
+  const res = <string>playerLaserStates.get(playerAddress.toByteString());
+  // generate a normal event as a func return value
+  generateEvent(`${res}`);
+  return res;
+}
+
+/**
  * Returns the player executors.
  *
  * @param {string} address - Address of the player.
