@@ -125,6 +125,29 @@ export const getPlayerCandidatePositionFromStore = async (web3Client: Client, ga
   return playerEntity as IPlayerOnchainEntity;
 }
 
+export const getPlayerCandidateLasersPositionFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerLasersRequest|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `registered_players_lasers_key::${playerAddress}` } as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+
+  if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
+    return null;
+  }
+  const candidatePos = scStorageData[0].candidate;
+  let playerLasersRequest: IPlayerLasersRequest|undefined = undefined;
+  try {
+    playerLasersRequest = JSON.parse(candidatePos as string);
+  } catch (ex) {
+      console.error("Error parsing data for player lasers request", candidatePos);
+      throw ex;
+  }
+  return playerLasersRequest as IPlayerLasersRequest;
+}
+
 
 export const isPlayerRegistered = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<boolean> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({
@@ -136,7 +159,7 @@ export const isPlayerRegistered = async (web3Client: Client, gameAddress: string
         parameter: playerAddress,
         callerAddress: playerAddress
     } as IReadData);
-    console.log("Is Player Registered ? ", readTxData);
+    //console.log("Is Player Registered ? ", readTxData);
     const isRegistered = readTxData[0].output_events[0].data.toLowerCase() === "true" ? true : false;
     return isRegistered;
 }
@@ -154,6 +177,43 @@ export const getActivePlayersCount = async (web3Client: Client, gameAddress: str
   return parseInt(readTxData[0].output_events[0].data, 10);
 }
 
+
+// this method will return both candidate and final states
+export const getActivePlayersCountFromStore = async (web3Client: Client, gameAddress: string, candidate: boolean = true): Promise<number|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `active_players_key`} as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+
+  if (!scStorageData || !scStorageData[0]) {
+    return null;
+  }
+
+  let data: string | null = null;
+
+  // check for candidate data only
+  if (candidate && !scStorageData[0].candidate) {
+    data = scStorageData[0].candidate;
+    return null;
+  }
+
+  // check for the opposite: final data only
+  if (!candidate && !scStorageData[0].final) {
+    data = scStorageData[0].final;
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return parseInt(data, 10);
+}
+
+// this function will return candidate states only!
 export const getActivePlayersAddresses = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
   const readTxData = await web3Client.smartContracts().readSmartContract({
       fee: 0,
@@ -171,6 +231,43 @@ export const getActivePlayersAddresses = async (web3Client: Client, gameAddress:
   return addresses;
 }
 
+// this method will return both candidate and final states
+export const getActivePlayersAddressesFromStore = async (web3Client: Client, gameAddress: string, candidate: boolean = true): Promise<Array<string>> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `active_players_addresses_key`} as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+
+  if (!scStorageData || !scStorageData[0]) {
+    return [];
+  }
+
+  let data: string | null = null;
+
+  // check for candidate data only
+  if (candidate && !scStorageData[0].candidate) {
+    data = scStorageData[0].candidate;
+    return [];
+  }
+
+  // check for the opposite: final data only
+  if (!candidate && !scStorageData[0].final) {
+    data = scStorageData[0].final;
+    return [];
+  }
+
+  if (!data) {
+    return [];
+  }
+
+  let addresses: Array<string> = (data as string).split(",");
+
+  return addresses;
+}
+
 export const getMaximumPlayersCount = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
   const readTxData = await web3Client.smartContracts().readSmartContract({
       fee: 0,
@@ -182,6 +279,41 @@ export const getMaximumPlayersCount = async (web3Client: Client, gameAddress: st
       callerAddress: playerAddress
   } as IReadData);
   return parseInt(readTxData[0].output_events[0].data, 10);
+}
+
+// this method will return both candidate and final states
+export const getMaximumPlayersCountFromStore = async (web3Client: Client, gameAddress: string, candidate: boolean = true): Promise<number|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `max_players_key`} as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+
+  if (!scStorageData || !scStorageData[0]) {
+    return null;
+  }
+
+  let data: string | null = null;
+
+  // check for candidate data only
+  if (candidate && !scStorageData[0].candidate) {
+    data = scStorageData[0].candidate;
+    return null;
+  }
+
+  // check for the opposite: final data only
+  if (!candidate && !scStorageData[0].final) {
+    data = scStorageData[0].final;
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return parseInt(data, 10);
 }
 
 export const getPlayerBalance = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<number> => {
@@ -210,7 +342,7 @@ export const getPlayerTokens = async (web3Client: Client, gameAddress: string, p
   return parseInt(readTxData[0].output_events[0].data, 10);
 }
 
-export const disconnectPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<void> => {
+export const disconnectPlayer = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<string> => {
   const callTxId = await web3Client.smartContracts().callSmartContract({
     fee: 0,
     gasPrice: 0,
@@ -222,7 +354,12 @@ export const disconnectPlayer = async (web3Client: Client, gameAddress: string, 
     parameter: playerAddress,
   } as ICallData);
   const callScOperationId = callTxId[0];
-  console.log("Disconnect player opId ", callScOperationId);
+  //console.log("Disconnect player opId ", callScOperationId);
+
+  // await final state
+  await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
+
+  return callScOperationId;
 }
 
 export const getCollectiblesState = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<ITokenOnchainEntity>> => {
@@ -291,7 +428,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
     return opIds ? opIds[0] : undefined;
   }
 
-  export const setPlayerLaserOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
+  export const setPlayerLasersOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
      // evaluate thread from which to send
     let nodeStatusInfo: INodeStatus|null|undefined = null;
     try {

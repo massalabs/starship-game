@@ -17,6 +17,10 @@ pub const TOKEN_ADDED: &'static str = "TOKEN_ADDED";
 pub const TOKEN_REMOVED: &'static str = "TOKEN_REMOVED";
 pub const TOKEN_COLLECTED: &'static str = "TOKEN_COLLECTED";
 
+// game lasers events
+pub const LASERS_SHOT: &'static str = "LASERS_SHOT";
+
+// all of these events come from js via polling the blockchain
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteCollectibleEventData {
@@ -50,10 +54,19 @@ pub struct CollectedEntityEventData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerLaserEventData {
-    pub player_uuid: String,
     pub player_address: String,
-    pub laser_x: f64,
-    pub laser_y: f64,
-    pub laser_rot: f64,
-    pub laser_w: f64,
+    pub player_uuid: String,
+    pub lasers_data: String,
+    pub time: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerLaserSerializedData {
+    pub player_uuid: String,
+    pub uuid: String,
+    pub x: f64,
+    pub y: f64,
+    pub rot: f64,
+    pub w: f64,
 }

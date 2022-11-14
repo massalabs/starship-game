@@ -471,10 +471,10 @@ export function setLaserPos(_args: string): void {
   // update storage
   playerLaserStates.set(
       playerLaserUpdate.playerAddress,
-      playerLaserUpdate.lasersData
+      playerLaserUpdate.serializeToString()
   );
 
-  /* TODOOOOO
+  /* TODOOOOO parse the data, check collisions emit events to other players
   // check if player has collected a token based on his pos
   const intersectionState: PlayerTokenCollected = {
     playerState: serializedPlayerData, // TODO: remove the sending player's state data

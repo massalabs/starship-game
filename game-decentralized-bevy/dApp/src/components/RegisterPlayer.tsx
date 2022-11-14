@@ -48,6 +48,7 @@ export interface IPropState {
 export interface IState extends IPropState {
   showModal: boolean;
   isRegisteringPlayer: boolean;
+  hasPlayerRegistered: boolean;
 }
 
 export default class RegisterPlayer extends Component<IProps, IState> {
@@ -66,6 +67,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       isPlayerRegistered: false,
       threadAddressesMap: new Map<number, IAccount>(),
       isRegisteringPlayer: false,
+      hasPlayerRegistered: false,
     };
 
     this.showModal = this.showModal.bind(this);
@@ -203,6 +205,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       this.setState({
         playerName: playerEntity.name,
         playerUuid: playerEntity.uuid,
+        hasPlayerRegistered,
         threadAddressesMap: Object.fromEntries(threadAddressesMap) 
       });
     }
@@ -348,7 +351,8 @@ export default class RegisterPlayer extends Component<IProps, IState> {
               playerUuid: playerEntity?.uuid,
               isPlayerRegistered: true,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
-              isRegisteringPlayer: false
+              isRegisteringPlayer: false,
+              hasPlayerRegistered: true, // player must be registered at this point
         };
       });
     }
@@ -462,7 +466,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
                 <Button variant="contained" onClick={this.checkForRegisteredPlayer} color='success'>Check Player</Button>
               </div>
               <div>
-                <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>Register Player</Button>
+                <Button variant="contained" onClick={this.registerPlayerAndOpenGame}>{this.state.hasPlayerRegistered ? "Enter Game" : "Register Player"}</Button>
               </div>
             </Box>
           </Modal>

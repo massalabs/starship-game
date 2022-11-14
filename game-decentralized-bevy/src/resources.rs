@@ -1,7 +1,12 @@
-use bevy::{prelude::*, utils::HashMap};
-use serde::Serialize;
+use bevy::{
+    prelude::*,
+    utils::{HashMap, HashSet},
+};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_bindgen::JsValue;
+
+use crate::events::PlayerLaserSerializedData;
 
 #[derive(Debug, Clone)]
 pub struct GameTextures {
@@ -36,6 +41,17 @@ pub struct RemoteGamePlayerState {
     pub r#type: EntityType,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteLaserState {
+    pub player_uuid: String,
+    pub uuid: String,
+    pub x: f64,
+    pub y: f64,
+    pub rot: f64,
+    pub w: f64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectedEntity {
@@ -55,20 +71,23 @@ pub struct RemoteCollectibleState {
 #[derive(Clone, Debug)]
 pub enum RemoteStateType {
     PlayerAdded(RemoteGamePlayerState),
-    PlayerRemoved(RemoteGamePlayerState), //uuid
+    PlayerRemoved(RemoteGamePlayerState),
     PlayerMoved(RemoteGamePlayerState),
     TokenCollected(CollectedEntity),
     TokenAdded(RemoteCollectibleState),
-    TokenRemoved(RemoteCollectibleState), // uuid
+    TokenRemoved(RemoteCollectibleState),
+    LasersShot((String, Vec<PlayerLaserSerializedData>)), // player_uuid - vec<PlayerLaserSerializedData>
 }
 
 #[derive(Clone)]
 pub struct RemoteGameState {
-    pub entity_players: BTreeMap<String, Entity>, // uuid - game entity
-    pub entity_collectibles: BTreeMap<String, Entity>, // uuid - game entity
-    pub entity_player_tags: BTreeMap<String, Entity>, // uuid - animation entity
-    pub remote_players: BTreeMap<String, RemoteGamePlayerState>, //uuid - state mapping
-    pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, //uuid - state mapping
+    pub entity_lasers: BTreeMap<String, HashSet<Entity>>, // [player uuid : laser entity] - both local and remote
+    pub entity_players: BTreeMap<String, Entity>, // [player uuid : game entity]  - both local and remote
+    pub entity_collectibles: BTreeMap<String, Entity>, // [player uuid : game entity]  - both local and remote
+    pub entity_player_tags: BTreeMap<String, Entity>, // [player uuid : animation entity]  - both local and remote
+    pub remote_players: BTreeMap<String, RemoteGamePlayerState>, // [player uuid - state mapping]
+    pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, // [player uuid - state mapping]
+    pub remote_lasers: BTreeMap<String, BTreeMap<String, RemoteLaserState>>, // [player uuid - [laser uuid: laser state mapping]]
 }
 
 impl RemoteGameState {
@@ -172,11 +191,13 @@ impl RemoteGameState {
 impl Default for RemoteGameState {
     fn default() -> Self {
         Self {
+            entity_lasers: BTreeMap::new(),
             entity_players: BTreeMap::new(),
             entity_collectibles: BTreeMap::new(),
             entity_player_tags: BTreeMap::new(),
             remote_players: BTreeMap::new(),
             remote_collectibles: BTreeMap::new(),
+            remote_lasers: Default::default(),
         }
     }
 }

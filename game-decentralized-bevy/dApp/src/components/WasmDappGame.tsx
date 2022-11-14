@@ -10,7 +10,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "../entities/PlayerEntity";
-import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerLaserOnchain, setPlayerPositionOnchain } from "../gameMethods";
+import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersAddressesFromStore, getActivePlayersCount, getActivePlayersCountFromStore, getCollectiblesState, getMaximumPlayersCount, getMaximumPlayersCountFromStore, getPlayerBalance, getPlayerCandidateLasersPositionFromStore, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerLasersOnchain, setPlayerPositionOnchain } from "../gameMethods";
 import { IGameEvent } from "../entities/GameEvent";
 import { PollTimeout, wait } from "../utils/time";
 import { getProviderUrl } from "../utils/massa";
@@ -22,7 +22,7 @@ import withRouter from "../utils/withRouter";
 import Button from '@mui/material/Button';
 import { ICollectedTokenOnchainEntity } from "../entities/CollectedTokenEntity";
 import { parseJson } from "../utils/utils";
-import { IPlayerLasersRequest } from "../entities/PlayerLasers";
+import { IPlayerLaserData, IPlayerLasersRequest } from "../entities/PlayerLasers";
 
 // game player events
 const PLAYER_MOVED = "PLAYER_MOVED";
@@ -33,6 +33,9 @@ const PLAYER_REMOVED = "PLAYER_REMOVED";
 const TOKEN_ADDED = "TOKEN_ADDED";
 const TOKEN_REMOVED = "TOKEN_REMOVED";
 const TOKEN_COLLECTED = "TOKEN_COLLECTED";
+
+// laser events
+const LASERS_SHOT = "LASERS_SHOT";
 
 // settings consts
 const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 200; // ms = 0.5 secs. Every half a sec update the player pos on chain
@@ -68,7 +71,8 @@ export interface IState {
 class WasmDappExample extends React.Component<IProps, IState> {
   private updateSelfBlockchainPositionTimeout: NodeJS.Timeout | null = null;
   private readSelfBlockchainPositionTimeout: NodeJS.Timeout | null = null;
-  private remoteBlockchainPositionTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
+  private remoteBlockchainPlayerPositionTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
+  private remoteBlockchainPlayerLasersTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
   private gameEventsPoller: EventPoller | null = null;
 
   constructor(props: IProps) {
@@ -98,11 +102,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
       maxPlayers: 0,
     };
 
+    // bind all component methods
     this.listenOnGameEvents = this.listenOnGameEvents.bind(this);
     this.updateSelfBlockchainPosition = this.updateSelfBlockchainPosition.bind(this);
     this.readSelfBlockchainPosition = this.readSelfBlockchainPosition.bind(this);
-    this.updateRemoteBlockchainPosition = this.updateRemoteBlockchainPosition.bind(this);
+    this.updatePlayerRemoteBlockchainPosition = this.updatePlayerRemoteBlockchainPosition.bind(this);
+    this.updatePlayerLasersRemoteBlockchainPosition = this.updatePlayerLasersRemoteBlockchainPosition.bind(this);
     this.disconnectPlayer = this.disconnectPlayer.bind(this);
+    this.stopAllPollers = this.stopAllPollers.bind(this);
   }
 
   async componentDidMount(): Promise<void> {
@@ -147,6 +154,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
       let playerBalance: number = 0;
       let playerTokens: number = 0;
       try {
+        // TODO: get final states only!
         playerEntity = await getPlayerPos(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
         toast(`Player Already Registered!`,{
           className: "toast",
@@ -190,9 +198,11 @@ class WasmDappExample extends React.Component<IProps, IState> {
       if (tokensGameUpdate.length > 0) { game.push_game_entity_updates(tokensGameUpdate); }
 
       // get connected players
-      let maxPlayers: number = 0;
-      let activePlayers: number = 0;
+      let activePlayers: number|null = 0;
+      let maxPlayers: number|null = 0;
       try {
+        //activePlayers = await getActivePlayersCountFromStore(web3Client as Client, this.state.gameAddress, false);
+        //maxPlayers = await getMaximumPlayersCountFromStore(web3Client as Client, this.state.gameAddress, false);
         activePlayers = await getActivePlayersCount(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
         maxPlayers = await getMaximumPlayersCount(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
       } catch (ex) {
@@ -202,6 +212,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
       // get connected players addresses
       let connectedPlayers: Array<string> = [];
       try {
+        //connectedPlayers = await getActivePlayersAddressesFromStore(web3Client as Client, this.state.gameAddress, false);
         connectedPlayers = await getActivePlayersAddresses(web3Client as Client, this.state.gameAddress, this.state.playerAddress);
       } catch (ex) {
         console.error("Error getting connected players data...", ex);
@@ -226,10 +237,14 @@ class WasmDappExample extends React.Component<IProps, IState> {
       })
       game.push_game_entity_updates(remotePlayersStatesUpdate);
 
-      // start polling the remote addresses positions
+      // start polling the remote addresses positions and lasers
       remotePlayersStates.forEach((remotePlayerState) => {
-        if (!this.remoteBlockchainPositionTimeouts.has(remotePlayerState.address)) {
-          this.remoteBlockchainPositionTimeouts.set(remotePlayerState.address, new PollTimeout(REMOTE_PLAYERS_POLLING_INTERVAL, remotePlayerState.address, this.updateRemoteBlockchainPosition));
+        if (!this.remoteBlockchainPlayerPositionTimeouts.has(remotePlayerState.address)) {
+          this.remoteBlockchainPlayerPositionTimeouts.set(remotePlayerState.address, new PollTimeout(REMOTE_PLAYERS_POLLING_INTERVAL, remotePlayerState.address, this.updatePlayerRemoteBlockchainPosition));
+        }
+
+        if (!this.remoteBlockchainPlayerLasersTimeouts.has(remotePlayerState.address)) {
+          this.remoteBlockchainPlayerLasersTimeouts.set(remotePlayerState.address, new PollTimeout(REMOTE_PLAYERS_POLLING_INTERVAL, remotePlayerState.address, this.updatePlayerLasersRemoteBlockchainPosition));
         }
       });
 
@@ -239,8 +254,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
               wasm,
               isLoading: false,
               web3Client,
-              activePlayers,
-              maxPlayers,
+              activePlayers: activePlayers ? activePlayers : 0,
+              maxPlayers: maxPlayers ? maxPlayers : 0,
               playerBalance,
               playerTokens,
               playerOnchainState: playerEntity,
@@ -282,7 +297,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
       original_caller_address: null,
       emitter_address: this.state.gameAddress,
       eventsNameRegex: null,
-      is_final: true // only listen for final game events here
+      is_final: false // only listen for final game events here
     } as IEventRegexFilter;
 
     this.gameEventsPoller = EventPoller.startEventsPolling(
@@ -359,9 +374,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
               game.push_game_entity_updates([gameEntity]);
 
               // start polling player position
-              if (!this.remoteBlockchainPositionTimeouts.has(playerAddedEventData.address)) {
-                this.remoteBlockchainPositionTimeouts.set(playerAddedEventData.address, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddedEventData.address, this.updateRemoteBlockchainPosition));
+              if (!this.remoteBlockchainPlayerPositionTimeouts.has(playerAddedEventData.address)) {
+                this.remoteBlockchainPlayerPositionTimeouts.set(playerAddedEventData.address, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddedEventData.address, this.updatePlayerRemoteBlockchainPosition));
               }
+
+              // start polling player lasers
+              if (!this.remoteBlockchainPlayerLasersTimeouts.has(playerAddedEventData.address)) {
+                this.remoteBlockchainPlayerLasersTimeouts.set(playerAddedEventData.address, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddedEventData.address, this.updatePlayerLasersRemoteBlockchainPosition));
+              }
+
               // increase the players count
               this.setState({
                 activePlayers: this.state.activePlayers + 1
@@ -405,7 +426,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
               let collectedTokenEventData = parsedCollectedTokenEvent.data as ICollectedTokenOnchainEntity;
 
               // push event to game engine
-              const gameEntity = new GameEntityUpdate(TOKEN_COLLECTED, eventData as string);
+              const gameEntity = new GameEntityUpdate(TOKEN_COLLECTED, JSON.stringify({...collectedTokenEventData}));
               game.push_game_entity_updates([gameEntity]);
 
               // check if this update is concerning us or not
@@ -474,27 +495,26 @@ class WasmDappExample extends React.Component<IProps, IState> {
     const newY: number = game.get_player_y();
     const newRot: number = game.get_player_rot();
     const newW: number = game.get_player_w();
-    const lasersState: string | undefined = game.get_player_lasers(); // "{...laser1}@{...laser2}@{...laser3}""
+    const lasersState: string | undefined = game.get_player_lasers(); // "{...uuid,x,y,rot,w}@{...uuid,x,y,rot,w}@{...uuid,x,y,rot,w}...""
 
     // update coors state and then update blockchain
     this.setState((prevState: IState, prevProps: IProps) => {
       return {...prevState, playerGameState: {x: newX, y: newY, rot: newRot, w: newW}}
-    }, async () => {
-      //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
-      const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot, w: newW } as IPlayerOnchainEntity;
-
-      // update players position onchain
-      await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
-
-      // now update player lasers
-      // send update to blockchain
-      await setPlayerLaserOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, {
-        playerAddress: this.state.playerAddress,
-        playerUuid: this.state.playerUuid,
-        lasersData: lasersState ? lasersState : "", // pass the game state directly to the smart contract
-        time: (new Date()).getTime()
-      } as IPlayerLasersRequest);
     });
+
+    //console.log("Updating Blockchain Coords to...", newX, newY, newRot);
+    const playerUpdate = { ...this.state.playerOnchainState, x: newX, y: newY, rot: newRot, w: newW } as IPlayerOnchainEntity;
+
+    // update players position onchain
+    await setPlayerPositionOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, playerUpdate);
+
+    // send new laser state to blockchain
+    await setPlayerLasersOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, {
+      playerAddress: this.state.playerAddress,
+      playerUuid: this.state.playerUuid,
+      lasersData: lasersState ? lasersState : "", // pass the game state directly to the smart contract
+      time: (new Date()).getTime()
+    } as IPlayerLasersRequest);
 
     // set a new timeout
     this.updateSelfBlockchainPositionTimeout = setTimeout(this.updateSelfBlockchainPosition, UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY);
@@ -533,6 +553,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
   }
 
   disconnectPlayer = async () => {
+    this.stopAllPollers();
     this.setState({isDisconnecting: true});
     try {
       await disconnectPlayer(this.state.web3Client as Client, this.state.gameAddress, this.state.playerAddress);
@@ -542,9 +563,9 @@ class WasmDappExample extends React.Component<IProps, IState> {
     this.setState({isDisconnecting: false, isPlayerRegistered: false});
   }
 
-  updateRemoteBlockchainPosition = async (playerAddress: string) => {
+  updatePlayerRemoteBlockchainPosition = async (playerAddress: string) => {
     // if there is an already existing watcher, clear it
-    const timeout: PollTimeout | undefined = this.remoteBlockchainPositionTimeouts.get(playerAddress);
+    const timeout: PollTimeout | undefined = this.remoteBlockchainPlayerPositionTimeouts.get(playerAddress);
     if (timeout) {
       timeout.clear();
     }
@@ -564,10 +585,60 @@ class WasmDappExample extends React.Component<IProps, IState> {
     }
 
     // set a new timeout
-    this.remoteBlockchainPositionTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updateRemoteBlockchainPosition));
+    this.remoteBlockchainPlayerPositionTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updatePlayerRemoteBlockchainPosition));
   }
 
-  componentWillUnmount(): void {
+  updatePlayerLasersRemoteBlockchainPosition = async (playerAddress: string) => {
+    // if there is an already existing watcher, clear it
+    const timeout: PollTimeout | undefined = this.remoteBlockchainPlayerLasersTimeouts.get(playerAddress);
+    if (timeout) {
+      timeout.clear();
+    }
+
+    // get player lasers from blockchain
+    let remotePlayerLasersRequest: IPlayerLasersRequest|null = null;
+    try {
+      remotePlayerLasersRequest = await getPlayerCandidateLasersPositionFromStore(this.state.web3Client as Client, this.state.gameAddress, playerAddress);
+    } catch (ex) {
+      console.error(`Error getting remote player lasers request`, ex);
+    }
+
+    /*
+    // if there is data send it to the game engine
+    if (remotePlayerLasersRequest) {
+      let playerLasersData: Array<IPlayerLaserData> = [];
+      try {
+        const laserStates = remotePlayerLasersRequest?.lasersData.split("@");
+        laserStates.forEach(laserState => {
+          let laserStateDataJSON: IPlayerLaserData|undefined = undefined;
+          try {
+            laserStateDataJSON = JSON.parse(laserState as string);
+          } catch (ex) {}
+          if (laserStateDataJSON) {
+            playerLasersData.push(laserStateDataJSON);
+          }
+        })
+      } catch (ex) {
+          console.error("Error parsing data for player laser");
+          throw ex;
+      }
+
+      // send update events to game engine
+      const lasersGameUpdate = playerLasersData.map(laserData => {
+        return new GameEntityUpdate(LASERS_SHOT, JSON.stringify({...laserData}));
+      })
+      game.push_game_entity_updates(lasersGameUpdate);
+    }
+    */
+
+    // send update events to game engine
+    game.push_game_entity_updates([new GameEntityUpdate(LASERS_SHOT, JSON.stringify({...remotePlayerLasersRequest}))]);
+
+    // set a new timeout
+    this.remoteBlockchainPlayerLasersTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updatePlayerLasersRemoteBlockchainPosition));
+  }
+
+  stopAllPollers = async () => {
     let tries = 0;
     while (tries < 3) {
       if (this.gameEventsPoller) {
@@ -579,10 +650,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
       if (this.readSelfBlockchainPositionTimeout) {
         clearTimeout(this.readSelfBlockchainPositionTimeout);
       }
-      this.remoteBlockchainPositionTimeouts.forEach(timeout => timeout.clear());
+      this.remoteBlockchainPlayerPositionTimeouts.forEach(timeout => timeout.clear());
+      this.remoteBlockchainPlayerLasersTimeouts.forEach(timeout => timeout.clear());
       wait(500);
       tries++;
     }
+  }
+
+  componentWillUnmount(): void {
+    this.stopAllPollers();
   }
 
   render(): JSX.Element {

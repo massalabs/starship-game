@@ -2,10 +2,11 @@
 
 use crate::components::ExplosionToSpawn;
 use crate::resources::RemoteGamePlayerState;
-use crate::utils::spawn_player_name_text2d_entity;
+use crate::utils::{inplace_intersection, spawn_laser_closure, spawn_player_name_text2d_entity};
 use anyhow::{Context, Result};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::Vec3Swizzles;
+use bevy::reflect::Uuid;
 use bevy::sprite::collide_aabb::collide;
 use bevy::text::Text2dBounds;
 use bevy::utils::HashMap;
@@ -13,11 +14,11 @@ use bevy::window::PresentMode;
 use bevy::{math::Vec2, prelude::*, time::FixedTimestep};
 use bevy_debug_text_overlay::{screen_print, OverlayPlugin};
 use components::{
-    AnimateNameTranslation, Collectible, Explosion, ExplosionTimer, LocalLaser, LocalPlayer,
-    Movable, RemotePlayer, SpriteSize, Velocity,
+    AnimateNameTranslation, Collectible, Explosion, ExplosionTimer, LaserData, LocalLaser,
+    LocalPlayer, Movable, RemoteLaser, RemotePlayer, SpriteSize, Velocity,
 };
 use errors::ClientError;
-use events::{PlayerLaserEventData, PlayerMoved};
+use events::{PlayerLaserEventData, PlayerLaserSerializedData, PlayerMoved};
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use resources::{
     CollectedEntity, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState,
@@ -27,6 +28,8 @@ use rust_js_mappers::{
     get_key_value_from_obj, get_value_for_key, map_js_update_to_rust_entity_state,
 };
 use std::collections::HashSet;
+use std::str::FromStr;
+use utils::spawn_collectible_closure;
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_LASERS, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -99,11 +102,13 @@ fn main() {
         SystemSet::new()
             .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
             .with_system(screen_print_text)
+            .with_system(local_player_laser_shoot_system)
+            .with_system(laser_movable_system)
             .with_system(local_player_movement_system)
             .with_system(on_local_player_moved_system)
-            .with_system(laser_movable_system)
             .with_system(entities_from_blockchain_update_system)
-            .with_system(interpolate_blockchain_entities_state_system)
+            .with_system(interpolate_blockchain_players_state_system)
+            .with_system(interpolate_blockchain_lasers_state_system)
             .with_system(player_tag_animation_system)
             .with_system(player_collectible_collision_system)
             .with_system(explosion_to_spawn_system)
@@ -203,7 +208,7 @@ fn entities_from_blockchain_update_system(
                                     },
                                     ..Default::default()
                                 })
-                                .insert(LocalPlayer)
+                                .insert(LocalPlayer(player_added.uuid.clone()))
                                 .insert(SpriteSize::from(PLAYER_SIZE))
                                 .insert(Velocity {
                                     linear: PLAYER_LINEAR_MOVEMENT_SPEED,
@@ -308,35 +313,17 @@ fn entities_from_blockchain_update_system(
                     }
                 }
                 Some(RemoteStateType::TokenAdded(token_added)) => {
-                    let mut spawn_collectible_closure = |collectible_texture: Handle<Image>,
-                                                         state: RemoteCollectibleState|
-                     -> Entity {
-                        commands
-                            .spawn_bundle(SpriteBundle {
-                                texture: collectible_texture,
-                                transform: Transform {
-                                    translation: Vec3::new(state.position.x, state.position.y, 1.0), // set z axis to 1 so tokens stay above
-                                    scale: Vec3::new(0.5, 0.5, 1.),
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            })
-                            .insert(Collectible(state.uuid.clone()))
-                            .insert(SpriteSize::from(COLLECTIBLE_SIZE))
-                            .id()
-                    };
-
                     // add token state
                     game_state.add_new_collectible(&token_added.uuid, token_added.clone());
                     let entity_id = spawn_collectible_closure(
+                        &mut commands,
                         game_textures.collectible.clone(),
                         token_added.clone(),
                     );
                     // add token entity
                     game_state.add_new_collectible_entity(&token_added.uuid, entity_id);
                 }
-                Some(RemoteStateType::TokenRemoved(RemoteCollectibleState { uuid, .. }))
-                | Some(RemoteStateType::TokenCollected(CollectedEntity { uuid, .. })) => {
+                Some(RemoteStateType::TokenRemoved(RemoteCollectibleState { uuid, .. })) => {
                     // despawn entity id
                     if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
                         // despawn the remote collectible entity
@@ -345,19 +332,133 @@ fn entities_from_blockchain_update_system(
                         game_state.remove_collectible(&uuid);
                     }
                 }
+                Some(RemoteStateType::TokenCollected(CollectedEntity { uuid, .. })) => {
+                    info!("TOKEN COLLECTED {:?}", uuid);
+                    // despawn entity id
+                    if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
+                        // despawn the remote collectible entity
+                        commands.entity(*entity_id).despawn();
+                        // remove token state and entity from all collections
+                        game_state.remove_collectible(&uuid);
+                    }
+                }
+                Some(RemoteStateType::LasersShot((player_uuid, lasers_shot))) => {
+                    info!("[BEVY] LASERS SHOT {:?}", &lasers_shot);
+
+                    // remove all uuids from the states collection which are not in the update
+                    let mut exiting_laser = game_state
+                        .remote_lasers
+                        .get_mut(&player_uuid)
+                        .and_then(|player_lasers_map| {
+                            // 3 options:
+                            // - overwrite an existing state
+                            // - delete an entry not in the update
+                            // - a new laser entry
+
+                            let mut laser_shot_uuids = lasers_shot
+                                .iter()
+                                .cloned()
+                                .map(|shot| shot.uuid)
+                                .collect::<HashSet<String>>();
+
+                            let mut game_lasers_uuids = player_lasers_map
+                                .keys()
+                                .cloned()
+                                .collect::<HashSet<String>>();
+
+                            // -- still persisting lasers. Update values in the states map
+                            let persisting_laser_uuids =
+                                inplace_intersection(&mut laser_shot_uuids, &mut game_lasers_uuids);
+
+                            /*
+                            // -- laser_shot_uuids must now have the reduced states => only new lasers, create them
+                            laser_shot_uuids.iter().map(|new_laser_uuid| {
+                                let entity_id = spawn_laser_closure(
+                                    &mut commands,
+                                    game_textures.laser.clone(),
+                                    player_lasers_map.get(new_laser_uuid).clone().unwrap()
+                                );
+                            });
+
+                            // -- game_lasers_uuids must now have the reduced states => old lasers to be deleted
+                            game_state
+                            .entity_lasers
+                            .get_mut(&player_uuid)
+                            .and_then(|entities_set| Some(entities_set.remove(&entity)));
+
+                            // remove repeated entries from the map
+                            player_lasers_map.retain(|uuid, val| {
+                                let has_laser_uuid = lasers_shot.iter().find(|l| l.uuid.eq(uuid));
+                                has_laser_uuid.is_some()
+                            });
+                            */
+
+                            Some(true)
+                        });
+                }
                 None => {}
             }
         }
     });
 }
 
-fn interpolate_blockchain_entities_state_system(
+fn interpolate_blockchain_lasers_state_system(
+    mut commands: Commands,
+    win_size: Res<WinSize>,
+    mut game_state: ResMut<RemoteGameState>,
+    mut query: Query<(Entity, &mut Transform, &Velocity, &RemoteLaser), With<RemoteLaser>>,
+) {
+    for (entity, mut transform, velocity, remote_laser) in query.iter_mut() {
+        let LaserData {
+            uuid,
+            player_uuid,
+            start_pos,
+            start_rot,
+        } = &remote_laser.0;
+
+        if let Some(remote_laser_state) = game_state.remote_lasers.get_mut(player_uuid) {
+            let remote_laser_pos = remote_laser_state.get(&uuid.to_string());
+            if let Some(remote_laser_pos) = remote_laser_pos {
+                // TODO: how to interpolate - use the blockchain x, y state too or just the rotation ?
+                transform.rotation = Quat::from_array([
+                    0.,
+                    0.,
+                    remote_laser_pos.rot as f32,
+                    remote_laser_pos.w as f32,
+                ]);
+                let movement_direction = transform.rotation * Vec3::Y;
+                transform.translation += movement_direction * velocity.linear * TIME_STEP;
+
+                // despawn when out of screen
+                let mut should_despawn = false;
+
+                if transform.translation.y > win_size.h / 2.
+                    || transform.translation.y < -win_size.h / 2.
+                    || transform.translation.x > win_size.w / 2.
+                    || transform.translation.x < -win_size.w / 2.
+                {
+                    should_despawn = true;
+                    commands.entity(entity).despawn();
+
+                    // when out of screen remove remote laser entity if present
+                    game_state
+                        .entity_lasers
+                        .get_mut(player_uuid)
+                        .and_then(|entities_set| Some(entities_set.remove(&entity)));
+                }
+            }
+        }
+    }
+}
+
+fn interpolate_blockchain_players_state_system(
     mut commands: Commands,
     mut game_state: ResMut<RemoteGameState>,
     mut query: Query<(Entity, &mut Transform, &Velocity, &RemotePlayer), With<RemotePlayer>>,
 ) {
     for (entity, mut transform, velocity, remote_player) in query.iter_mut() {
         if let Some(player_updated_state) = game_state.remote_players.get_mut(&remote_player.0) {
+            // TODO: how to interpolate - use the blockchain x, y state too or just the rotation ?
             transform.rotation = player_updated_state.rotation;
             let movement_direction = transform.rotation * Vec3::Y;
             transform.translation += movement_direction * velocity.linear * TIME_STEP;
@@ -429,11 +530,12 @@ fn local_player_movement_system(
     mut commands: Commands,
     time: Res<Time>,
     game_textures: Res<GameTextures>,
+    mut game_state: ResMut<RemoteGameState>,
     mut player_moved_events: EventWriter<PlayerMoved>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<(&Velocity, &mut Transform), With<LocalPlayer>>,
+    mut query: Query<(&Velocity, &mut Transform, &LocalPlayer), With<LocalPlayer>>,
 ) {
-    for (velocity, mut transform) in query.iter_mut() {
+    for (velocity, mut transform, local_player) in query.iter_mut() {
         // ship rotation
         let mut rotation_factor = 0.0;
 
@@ -456,36 +558,6 @@ fn local_player_movement_system(
         let extents = Vec3::from((BOUNDS / 2.0, 0.0));
         transform.translation = transform.translation.clamp(-extents, extents);
 
-        // if space is pressed, shoot laser
-        if keyboard_input.just_pressed(KeyCode::Space) {
-            let laser_texture = game_textures.laser.clone();
-            commands
-                .spawn_bundle(SpriteBundle {
-                    texture: laser_texture,
-                    transform: Transform {
-                        translation: Vec3::new(
-                            transform.translation.x,
-                            transform.translation.y,
-                            0.,
-                        ),
-                        rotation: transform.rotation.clone(),
-                        scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .insert(LocalLaser((
-                    transform.translation.clone(),
-                    transform.rotation.clone(),
-                )))
-                .insert(SpriteSize::from(PLAYER_LASER_SIZE))
-                .insert(Movable { auto_despawn: true })
-                .insert(Velocity {
-                    linear: LASER_LINEAR_MOVEMENT_SPEED,
-                    rotational: f32::to_radians(0.0),
-                });
-        }
-
         // send message about player translation
         player_moved_events.send(PlayerMoved {
             pos: transform.translation,
@@ -504,64 +576,126 @@ fn on_local_player_moved_system(mut events: EventReader<PlayerMoved>) {
     }
 }
 
+fn local_player_laser_shoot_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    game_textures: Res<GameTextures>,
+    mut game_state: ResMut<RemoteGameState>,
+    mut player_moved_events: EventWriter<PlayerMoved>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(&Velocity, &mut Transform, &LocalPlayer), With<LocalPlayer>>,
+) {
+    for (velocity, mut transform, local_player) in query.iter_mut() {
+        // if space is pressed, shoot laser
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            let uuid = Uuid::new_v4();
+            let laser_texture = game_textures.laser.clone();
+            let laser_entity_id = commands
+                .spawn_bundle(SpriteBundle {
+                    texture: laser_texture,
+                    transform: Transform {
+                        translation: Vec3::new(
+                            transform.translation.x,
+                            transform.translation.y,
+                            0.,
+                        ),
+                        rotation: transform.rotation.clone(),
+                        scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .insert(LocalLaser(LaserData {
+                    uuid: uuid.clone(),
+                    player_uuid: local_player.0.clone(),
+                    start_pos: transform.translation.clone(),
+                    start_rot: transform.rotation.clone(),
+                }))
+                .insert(SpriteSize::from(PLAYER_LASER_SIZE))
+                .insert(Movable { auto_despawn: true })
+                .insert(Velocity {
+                    linear: LASER_LINEAR_MOVEMENT_SPEED,
+                    rotational: f32::to_radians(0.0),
+                })
+                .id();
+
+            // insert the laser entity
+            if let Some(entities_set) = game_state.entity_lasers.get_mut(&local_player.0) {
+                entities_set.insert(laser_entity_id);
+            } else {
+                let mut hset = bevy::utils::HashSet::new();
+                hset.insert(laser_entity_id);
+                game_state
+                    .entity_lasers
+                    .insert(local_player.0.clone(), hset);
+            }
+        }
+    }
+}
+
 fn laser_movable_system(
     mut commands: Commands,
     win_size: Res<WinSize>,
+    mut game_state: ResMut<RemoteGameState>,
     mut query: Query<(Entity, &Velocity, &mut Transform, &Movable, &LocalLaser), With<LocalLaser>>,
 ) {
-    let mut serialized_lasers_data: Option<String> = None;
-    for (entity, velocity, mut transform, movable, laser) in query.iter_mut() {
-        // get the laser angle at which it was shot at
-        let laser_start_position = laser.0;
-        transform.rotation = laser_start_position.1;
+    let mut serialized_lasers_data: Vec<String> = vec![];
+    for (entity, velocity, mut transform, movable, local_laser) in query.iter_mut() {
+        let LaserData {
+            uuid,
+            player_uuid,
+            start_pos,
+            start_rot,
+        } = &local_laser.0;
+
+        // get the laser angle at which it was shot at (it is CONSTANT)
+        transform.rotation = start_rot.clone();
 
         // extrapolate the position
         let movement_direction = transform.rotation * Vec3::Y;
         transform.translation += movement_direction * velocity.linear * TIME_STEP;
 
-        // do simple movement
+        // despawn when out of screen
         let mut should_despawn = false;
-        if movable.auto_despawn {
-            // despawn when out of screen
-            if transform.translation.y > win_size.h / 2.
-                || transform.translation.y < -win_size.h / 2.
-                || transform.translation.x > win_size.w / 2.
-                || transform.translation.x < -win_size.w / 2.
-            {
-                should_despawn = true;
-                commands.entity(entity).despawn();
-            }
+
+        if transform.translation.y > win_size.h / 2.
+            || transform.translation.y < -win_size.h / 2.
+            || transform.translation.x > win_size.w / 2.
+            || transform.translation.x < -win_size.w / 2.
+        {
+            should_despawn = true;
+            commands.entity(entity).despawn();
+
+            // remove laser entity if present
+            game_state
+                .entity_lasers
+                .get_mut(player_uuid)
+                .and_then(|entities_set| Some(entities_set.remove(&entity)));
         }
 
         // any entity that is not to be despawned, is to be serialized and added to the output
         if !should_despawn {
-            let serialized_laser = serde_json::to_string(&PlayerLaserEventData {
-                player_uuid: "fsss".to_string(),
-                player_address: "fsss".to_string(),
-                laser_x: transform.translation.x as f64,
-                laser_y: transform.translation.y as f64,
-                laser_rot: transform.rotation.z as f64,
-                laser_w: transform.rotation.w as f64,
+            let serialized_laser = serde_json::to_string(&PlayerLaserSerializedData {
+                player_uuid: player_uuid.to_string(),
+                uuid: uuid.to_string(),
+                x: transform.translation.x as f64,
+                y: transform.translation.y as f64,
+                rot: transform.rotation.z as f64,
+                w: transform.rotation.w as f64,
             })
             .ok();
 
             // append the serialized data
             if let Some(serialized_laser) = serialized_laser {
-                match serialized_lasers_data {
-                    Some(data) => {
-                        serialized_lasers_data = Some(format!("{}@{}", data, serialized_laser));
-                    }
-                    None => {
-                        serialized_lasers_data = Some(format!("{}", serialized_laser));
-                    }
-                }
+                serialized_lasers_data.push(serialized_laser);
             }
         }
     }
 
     // send over the thread the entire lasers state to the users
     LOCAL_PLAYER_LASERS.with(|pos| {
-        *pos.borrow_mut() = serialized_lasers_data;
+        let joined_lasers = serialized_lasers_data.join("@");
+        *pos.borrow_mut() = Some(joined_lasers);
     });
 }
 

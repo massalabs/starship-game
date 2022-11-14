@@ -1,5 +1,6 @@
 use bevy::math::Vec2;
 use bevy::prelude::{Component, Entity, Quat, Vec3};
+use bevy::reflect::Uuid;
 use bevy::time::Timer;
 
 #[derive(Component, Clone, Debug)]
@@ -26,7 +27,7 @@ pub struct Velocity {
 pub struct Collectible(pub String); // the external uuid
 
 #[derive(Component, Clone, Debug)]
-pub struct LocalPlayer;
+pub struct LocalPlayer(pub String); // the external uuid
 
 #[derive(Component, Clone, Debug)]
 pub struct RemotePlayer(pub String); // the external uuid
@@ -49,5 +50,16 @@ impl Default for ExplosionTimer {
 #[derive(Component)]
 pub struct AnimateNameTranslation(pub Entity);
 
+//components that dont exchange data with react (just for internal markers use)
 #[derive(Component)]
-pub struct LocalLaser(pub (Vec3, Quat));
+pub struct LocalLaser(pub LaserData);
+
+#[derive(Component)]
+pub struct RemoteLaser(pub LaserData);
+
+pub struct LaserData {
+    pub uuid: Uuid,
+    pub player_uuid: String,
+    pub start_pos: Vec3,
+    pub start_rot: Quat,
+}

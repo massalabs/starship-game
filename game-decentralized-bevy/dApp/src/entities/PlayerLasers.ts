@@ -9,3 +9,12 @@ export interface IPlayerLasersRequest {
   lasersData: string;
   time: number;
 }
+
+export interface IPlayerLaserData {
+  player_uuid: string;
+  uuid: string;
+  x: number;
+  y: number;
+  rot: number;
+  w: number;
+}

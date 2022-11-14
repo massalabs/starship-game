@@ -3,11 +3,13 @@ use wasm_bindgen::{JsCast, JsValue};
 
 use crate::errors::ClientError;
 use crate::events::{
-    CollectedEntityEventData, RemoteCollectibleEventData, RemotePlayerEventData, PLAYER_ADDED,
-    PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
+    CollectedEntityEventData, PlayerLaserEventData, PlayerLaserSerializedData,
+    RemoteCollectibleEventData, RemotePlayerEventData, LASERS_SHOT, PLAYER_ADDED, PLAYER_MOVED,
+    PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
 };
 use crate::resources::{
-    CollectedEntity, EntityType, RemoteCollectibleState, RemoteGamePlayerState, RemoteStateType,
+    CollectedEntity, EntityType, RemoteCollectibleState, RemoteGamePlayerState, RemoteLaserState,
+    RemoteStateType,
 };
 use crate::wasm::GameEntityUpdate;
 use anyhow::{Context, Result};
@@ -100,7 +102,7 @@ pub fn map_js_update_to_rust_entity_state(
 
     match operation.as_str() {
         PLAYER_ADDED | PLAYER_MOVED | PLAYER_REMOVED => {
-            //info!("PLAYER ACTION {:?} ", operation.as_str());
+            //info!("[BEVY] PLAYER ACTION {:?} ", operation.as_str());
             let remote_player_event = get_key_value_from_obj::<String>("data", &js_obj)
                 .map(|data| serde_json::from_str::<RemotePlayerEventData>(data.as_str()).ok())
                 .flatten()
@@ -121,7 +123,7 @@ pub fn map_js_update_to_rust_entity_state(
             }
         }
         TOKEN_ADDED | TOKEN_REMOVED => {
-            //info!("TOKEN ACTION {:?} ", operation.as_str());
+            //info!("[BEVY] TOKEN ACTION {:?} ", operation.as_str());
             let collected_entity_event = get_key_value_from_obj::<String>("data", &js_obj)
                 .map(|data| serde_json::from_str::<RemoteCollectibleEventData>(data.as_str()).ok())
                 .flatten()
@@ -147,8 +149,34 @@ pub fn map_js_update_to_rust_entity_state(
                     time: data.time,
                 });
 
-            //info!("TOKEN COLLECTED {:?}", &collected_entity_event);
+            //info!("[BEVY] TOKEN COLLECTED {:?}", &collected_entity_event);
             return Ok(collected_entity_event.map(RemoteStateType::TokenCollected));
+        }
+        LASERS_SHOT => {
+            let lasers_shot_event = get_key_value_from_obj::<String>("data", &js_obj)
+                .map(|data| serde_json::from_str::<PlayerLaserEventData>(data.as_str()).ok())
+                .flatten();
+
+            let player_uuid = lasers_shot_event.as_ref()
+                .and_then(|data| Some(data.player_uuid.clone()))
+                .expect("A valid player uuid");
+
+            let player_lasers = lasers_shot_event
+                .map(|f| {
+                    f.lasers_data
+                        .split("@")
+                        .filter_map(|item| {
+                            serde_json::from_str::<PlayerLaserSerializedData>(item).ok()
+                        })
+                        .collect::<Vec<PlayerLaserSerializedData>>()
+                })
+                .unwrap_or_default();
+
+            //info!("[BEVY] LASERS SHOT EVENT {:?}", &x);
+            return Ok(Some(RemoteStateType::LasersShot((
+                player_uuid,
+                player_lasers,
+            ))));
         }
         _ => return Ok(None),
     }
