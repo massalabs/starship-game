@@ -157,7 +157,8 @@ pub fn map_js_update_to_rust_entity_state(
                 .map(|data| serde_json::from_str::<PlayerLaserEventData>(data.as_str()).ok())
                 .flatten();
 
-            let player_uuid = lasers_shot_event.as_ref()
+            let player_uuid = lasers_shot_event
+                .as_ref()
                 .and_then(|data| Some(data.player_uuid.clone()))
                 .expect("A valid player uuid");
 

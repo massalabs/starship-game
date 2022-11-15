@@ -3,7 +3,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import './App.css';
 import 'react-toastify/dist/ReactToastify.css';
 import type {} from '@mui/lab/themeAugmentation';
-import { Client, IAccount } from "@massalabs/massa-web3";
+import { Client, EventPoller, IAccount, IEvent, IEventRegexFilter, INodeStatus, ON_MASSA_EVENT_DATA, ON_MASSA_EVENT_ERROR } from "@massalabs/massa-web3";
 import Box from '@mui/material/Box';
 import Modal from '@mui/material/Modal';
 import Button from '@mui/material/Button';
@@ -16,6 +16,9 @@ import { registerPlayer, isPlayerRegistered, getPlayerPos, getPlayerExecutors } 
 import { generateThreadAddressesMap, getProviderUrl, networks, networkValues } from "../utils/massa";
 import { Navigate } from "react-router-dom";
 import ReactScrollableList from 'react-scrollable-list';
+import { GAME_EVENTS_POLLING_INTERVAL, PLAYER_ADDED, PLAYER_POS_KEY } from "./WasmDappGame";
+import { IGameEvent } from "../entities/GameEvent";
+import { parseJson } from "../utils/utils";
 
 const style = {
   position: 'absolute' as 'absolute',
@@ -43,14 +46,13 @@ export interface IPropState {
   networkName: string;
   isPlayerRegistered: boolean;
   threadAddressesMap: Object;
+  playerEntity: IPlayerOnchainEntity|undefined;
 } 
-
 export interface IState extends IPropState {
   showModal: boolean;
   isRegisteringPlayer: boolean;
   hasPlayerRegistered: boolean;
 }
-
 export default class RegisterPlayer extends Component<IProps, IState> {
 
   constructor(props: IProps) {
@@ -68,6 +70,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       threadAddressesMap: new Map<number, IAccount>(),
       isRegisteringPlayer: false,
       hasPlayerRegistered: false,
+      playerEntity: undefined,
     };
 
     this.showModal = this.showModal.bind(this);
@@ -77,6 +80,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
     this.handleGameAddressChange = this.handleGameAddressChange.bind(this);
     this.handlePlayerSecretKeyChange = this.handlePlayerSecretKeyChange.bind(this);
     this.handleNetworkChange = this.handleNetworkChange.bind(this);
+    this.awaitPlayerAddedEvent = this.awaitPlayerAddedEvent.bind(this);
   }
 
   showModal = () => {
@@ -114,7 +118,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
   };
 
   async componentDidMount(): Promise<void> {
-
+    window.localStorage.setItem(PLAYER_POS_KEY, "");
   }
 
   async checkForRegisteredPlayer(): Promise<void> {
@@ -206,6 +210,7 @@ export default class RegisterPlayer extends Component<IProps, IState> {
         playerName: playerEntity.name,
         playerUuid: playerEntity.uuid,
         hasPlayerRegistered,
+        playerEntity,
         threadAddressesMap: Object.fromEntries(threadAddressesMap) 
       });
     }
@@ -304,13 +309,25 @@ export default class RegisterPlayer extends Component<IProps, IState> {
       // register the player
       try {
         const executorsSecretKeys = Object.values(Object.fromEntries(threadAddressesMap)).map(item => item.secretKey).join(',');
-        playerEntity = await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress, executorsSecretKeys);
+        await registerPlayer(web3Client as Client, this.state.gameAddress, this.state.playerName, this.state.playerAddress, executorsSecretKeys, false);
         toast(`Player Just Registered!`,{
           className: "toast",
           type: "success"
         });
       } catch (ex) {
         console.error("Error registering player...", ex);
+        this.setState({ isRegisteringPlayer: false });
+        toast(`Error registering player ${(ex as Error).message}!`,{
+          className: "toast",
+          type: "error"
+        });
+      }
+
+      // await the PLAYER_ADDED message
+      try {
+        playerEntity = await this.awaitPlayerAddedEvent(web3Client as Client);
+      } catch (ex) {
+        console.error("Error fetching PLAYER_ADDED event...", ex);
         this.setState({ isRegisteringPlayer: false });
         toast(`Error registering player ${(ex as Error).message}!`,{
           className: "toast",
@@ -352,10 +369,85 @@ export default class RegisterPlayer extends Component<IProps, IState> {
               isPlayerRegistered: true,
               threadAddressesMap: Object.fromEntries(threadAddressesMap),
               isRegisteringPlayer: false,
+              playerEntity,
               hasPlayerRegistered: true, // player must be registered at this point
         };
       });
     }
+  }
+
+  async awaitPlayerAddedEvent(web3Client: Client): Promise<IPlayerOnchainEntity> {
+
+    // determine the last slot
+    let nodeStatusInfo: INodeStatus|null|undefined = null;
+    try {
+      nodeStatusInfo = await web3Client.publicApi().getNodeStatus();
+    } catch(ex) {
+      console.log("Error getting node status");
+      throw ex;
+    }
+
+    const eventsFilter = {
+      start: (nodeStatusInfo as INodeStatus).last_slot, // start filtering only from the last slot which was processed onwards
+      end: null,
+      original_operation_id: null,
+      original_caller_address: null,
+      emitter_address: this.state.gameAddress,
+      eventsNameRegex: null,
+      is_final: false // only listen for final game events here
+    } as IEventRegexFilter;
+
+    const gameEventsPoller = EventPoller.startEventsPolling(
+      eventsFilter,
+      GAME_EVENTS_POLLING_INTERVAL,
+      web3Client
+    );
+
+    return new Promise((resolve, reject) => {
+      gameEventsPoller.on(ON_MASSA_EVENT_DATA, async (events: Array<IEvent>) => {
+        for (const event of events) {
+          let gameEvent: IGameEvent|undefined = undefined;
+          try {
+            gameEvent = JSON.parse(event.data) as IGameEvent;
+          } catch (err) {
+            console.warn("Ignoring game event...", event);
+            continue; // not a proper game event
+          }
+  
+          if (gameEvent && gameEvent.data) {
+            const eventMessageData = gameEvent.data.split("=");
+            if (eventMessageData.length !==2) {
+              continue;
+            }
+            const eventName = eventMessageData.at(0);
+            const eventData = eventMessageData.at(1);
+            switch (eventName) {
+              case PLAYER_ADDED: {
+                // try to parse event
+                const parsedPlayerAddedEventData = parseJson<IPlayerOnchainEntity>(eventData);
+                if (parsedPlayerAddedEventData.isError) {
+                  console.warn(`Could not parse PLAYER_ADDED event`);
+                  continue;
+                }
+                let playerAddedEventData = parsedPlayerAddedEventData.data as IPlayerOnchainEntity;
+                if (playerAddedEventData.address === this.state.playerAddress) {
+                  gameEventsPoller.stopPolling();
+                  return resolve(playerAddedEventData);
+                }
+                break;
+              }
+              default: {
+                break;
+              }
+            }
+          }
+        }
+      });
+      gameEventsPoller.on(ON_MASSA_EVENT_ERROR, (ex) => {
+        console.log("Game Poller Event Error ", ex);
+        return reject(ex);
+      });
+    })
   }
 
   componentWillUnmount(): void {

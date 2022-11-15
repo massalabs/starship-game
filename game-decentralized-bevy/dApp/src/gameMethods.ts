@@ -3,7 +3,7 @@ import { IPlayerOnchainEntity } from "./entities/PlayerEntity";
 import { IPlayerLasersRequest } from "./entities/PlayerLasers";
 import { ITokenOnchainEntity } from "./entities/TokenEntity";
 
-export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string): Promise<IPlayerOnchainEntity> => {
+export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string, awaitFinalization: boolean): Promise<IPlayerOnchainEntity|undefined> => {
     const callTxIds = await web3Client.smartContracts().callSmartContract({
       fee: 0,
       gasPrice: 0,
@@ -19,35 +19,39 @@ export const registerPlayer = async (web3Client: Client, gameAddress: string, pl
     console.log("Registered player opId ", callScOperationId);
 
     // await final state
-    await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
+    if (awaitFinalization) {
+      await web3Client.smartContracts().awaitRequiredOperationStatus(callScOperationId, EOperationStatus.FINAL);
 
-    const events = await EventPoller.getEventsOnce({
-      start: null,
-      end: null,
-      original_operation_id: callScOperationId,
-      original_caller_address: null,
-      emitter_address: null,
-    } as IEventFilter, web3Client);
-
-    let playerEntity: IPlayerOnchainEntity|undefined = undefined;
-    try {
-      const eventMessageData = events[0].data.split("=");
-      const eventName = eventMessageData.at(0);
-      const eventData = eventMessageData.at(1);
-      //console.log("EVENT PARTS ", eventName, eventData)
-      if (eventName === "PLAYER_ADDED") {
-        playerEntity = JSON.parse(eventData as string);
-      } else {
-        throw new Error("Missing expected event PLAYER ADDED");
+      const events = await EventPoller.getEventsOnce({
+        start: null,
+        end: null,
+        original_operation_id: callScOperationId,
+        original_caller_address: null,
+        emitter_address: null,
+      } as IEventFilter, web3Client);
+  
+      let playerEntity: IPlayerOnchainEntity|undefined = undefined;
+      try {
+        const eventMessageData = events[0].data.split("=");
+        const eventName = eventMessageData.at(0);
+        const eventData = eventMessageData.at(1);
+        //console.log("EVENT PARTS ", eventName, eventData)
+        if (eventName === "PLAYER_ADDED") {
+          playerEntity = JSON.parse(eventData as string);
+        } else {
+          throw new Error("Missing expected event PLAYER ADDED");
+        }
+      } catch (ex) {
+        console.error("Error parsing data for player entity", events[0].data);
+        throw ex;
       }
-    } catch (ex) {
-      console.error("Error parsing data for player entity", events[0].data);
-      throw ex;
+  
+      console.log("Registered player", playerEntity);
+  
+      return playerEntity as IPlayerOnchainEntity;
     }
 
-    console.log("Registered player", playerEntity);
-
-    return playerEntity as IPlayerOnchainEntity;
+    return undefined;
 }
 
 export const getPlayerPos = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerOnchainEntity> => {

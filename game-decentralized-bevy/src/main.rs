@@ -1,7 +1,7 @@
 #![allow(unused)] // silence unused warnings while exploring (to comment out)
 
 use crate::components::ExplosionToSpawn;
-use crate::resources::RemoteGamePlayerState;
+use crate::resources::{RemoteGamePlayerState, RemoteLaserState};
 use crate::utils::{inplace_intersection, spawn_laser_closure, spawn_player_name_text2d_entity};
 use anyhow::{Context, Result};
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
@@ -27,9 +27,9 @@ use resources::{
 use rust_js_mappers::{
     get_key_value_from_obj, get_value_for_key, map_js_update_to_rust_entity_state,
 };
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::str::FromStr;
-use utils::spawn_collectible_closure;
+use utils::{spawn_collectible_closure, spawn_game_screen_instructions};
 use wasm::{GameEntityUpdate, GAME_ENTITY_UPDATE, LOCAL_PLAYER_LASERS, LOCAL_PLAYER_POSITION};
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -101,7 +101,7 @@ fn main() {
     app.add_system_set(
         SystemSet::new()
             .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-            .with_system(screen_print_text)
+            //.with_system(screen_print_text)
             .with_system(local_player_laser_shoot_system)
             .with_system(laser_movable_system)
             .with_system(local_player_movement_system)
@@ -121,7 +121,7 @@ fn screen_print_text(time: Res<Time>) {
     let current_time = time.seconds_since_startup();
     let last_fps = 1.0 / time.delta_seconds_f64();
     screen_print!(sec: 1, col: Color::CYAN, "fps: {last_fps:.0}");
-    screen_print!(sec: 1, col: Color::GREEN, "current time: {current_time:.2}");
+    //screen_print!(sec: 1, col: Color::GREEN, "current time: {current_time:.2}");
 }
 
 fn setup_system(
@@ -173,6 +173,9 @@ fn setup_system(
         texture: background_texture,
         ..default()
     });
+
+    // insert the on-screen text instructions
+    spawn_game_screen_instructions(&mut commands, &asset_server);
 }
 
 fn entities_from_blockchain_update_system(
@@ -333,7 +336,7 @@ fn entities_from_blockchain_update_system(
                     }
                 }
                 Some(RemoteStateType::TokenCollected(CollectedEntity { uuid, .. })) => {
-                    info!("TOKEN COLLECTED {:?}", uuid);
+                    //info!("TOKEN COLLECTED {:?}", uuid);
                     // despawn entity id
                     if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
                         // despawn the remote collectible entity
@@ -343,58 +346,111 @@ fn entities_from_blockchain_update_system(
                     }
                 }
                 Some(RemoteStateType::LasersShot((player_uuid, lasers_shot))) => {
-                    info!("[BEVY] LASERS SHOT {:?}", &lasers_shot);
+                    //info!("[BEVY] LASERS SHOT {:?}", &lasers_shot);
 
-                    // remove all uuids from the states collection which are not in the update
-                    let mut exiting_laser = game_state
+                    // get current in-memory player lasers map
+                    let mut tree_map: BTreeMap<String, RemoteLaserState> = BTreeMap::new();
+                    let player_lasers_map = game_state
                         .remote_lasers
                         .get_mut(&player_uuid)
-                        .and_then(|player_lasers_map| {
-                            // 3 options:
-                            // - overwrite an existing state
-                            // - delete an entry not in the update
-                            // - a new laser entry
+                        .unwrap_or_else(|| &mut tree_map);
 
-                            let mut laser_shot_uuids = lasers_shot
-                                .iter()
-                                .cloned()
-                                .map(|shot| shot.uuid)
-                                .collect::<HashSet<String>>();
+                    // 3 options:
+                    // - overwrite an existing state
+                    // - delete an entry not in the update
+                    // - a new laser entry
 
-                            let mut game_lasers_uuids = player_lasers_map
-                                .keys()
-                                .cloned()
-                                .collect::<HashSet<String>>();
+                    let mut laser_shot_uuids = lasers_shot
+                        .iter()
+                        .cloned()
+                        .map(|shot| shot.uuid)
+                        .collect::<HashSet<String>>();
 
-                            // -- still persisting lasers. Update values in the states map
-                            let persisting_laser_uuids =
-                                inplace_intersection(&mut laser_shot_uuids, &mut game_lasers_uuids);
+                    let mut game_lasers_uuids = player_lasers_map
+                        .keys()
+                        .cloned()
+                        .collect::<HashSet<String>>();
 
-                            /*
-                            // -- laser_shot_uuids must now have the reduced states => only new lasers, create them
-                            laser_shot_uuids.iter().map(|new_laser_uuid| {
-                                let entity_id = spawn_laser_closure(
-                                    &mut commands,
-                                    game_textures.laser.clone(),
-                                    player_lasers_map.get(new_laser_uuid).clone().unwrap()
-                                );
-                            });
+                    // -- still persisting lasers. Update values in the states map
+                    let persisting_laser_uuids =
+                        inplace_intersection(&mut laser_shot_uuids, &mut game_lasers_uuids);
 
-                            // -- game_lasers_uuids must now have the reduced states => old lasers to be deleted
-                            game_state
+                    for persisting_laser_uuid in persisting_laser_uuids.iter() {
+                        // get the new recurring state from the sent update
+                        let laser_shot_new_state = lasers_shot
+                            .iter()
+                            .find(|laser| laser.uuid.eq(persisting_laser_uuid))
+                            .cloned()
+                            .unwrap();
+                        // replace the recurring laser in the internal state
+                        player_lasers_map.insert(
+                            persisting_laser_uuid.clone(),
+                            RemoteLaserState {
+                                player_uuid: laser_shot_new_state.player_uuid,
+                                uuid: laser_shot_new_state.uuid,
+                                x: laser_shot_new_state.x,
+                                y: laser_shot_new_state.y,
+                                rot: laser_shot_new_state.rot,
+                                w: laser_shot_new_state.w,
+                            },
+                        );
+                    }
+
+                    // -- laser_shot_uuids must now have the reduced states => only new lasers, create them
+                    for laser_shot_uuid in laser_shot_uuids.iter() {
+                        // get the new laser state from the sent update
+                        let laser_shot_new_state = lasers_shot
+                            .iter()
+                            .find(|laser| laser.uuid.eq(laser_shot_uuid))
+                            .cloned()
+                            .unwrap();
+
+                        // spawn the new laser
+                        let new_laser_entity_id = spawn_laser_closure(
+                            &mut commands,
+                            game_textures.laser.clone(),
+                            laser_shot_new_state.clone(),
+                        );
+
+                        // add the new laser to the internal state
+                        player_lasers_map.insert(
+                            laser_shot_uuid.clone(),
+                            RemoteLaserState {
+                                player_uuid: laser_shot_new_state.player_uuid,
+                                uuid: laser_shot_new_state.uuid,
+                                x: laser_shot_new_state.x,
+                                y: laser_shot_new_state.y,
+                                rot: laser_shot_new_state.rot,
+                                w: laser_shot_new_state.w,
+                            },
+                        );
+
+                        // TODO: save the new entity id
+                        /*
+                        game_state
                             .entity_lasers
                             .get_mut(&player_uuid)
-                            .and_then(|entities_set| Some(entities_set.remove(&entity)));
-
-                            // remove repeated entries from the map
-                            player_lasers_map.retain(|uuid, val| {
-                                let has_laser_uuid = lasers_shot.iter().find(|l| l.uuid.eq(uuid));
-                                has_laser_uuid.is_some()
+                            .and_then(|entities_set| {
+                                Some(entities_set.insert(new_laser_entity_id))
                             });
-                            */
+                        */
+                    }
 
-                            Some(true)
-                        });
+                    // -- game_lasers_uuids must now have the reduced states => old lasers to be deleted
+                    for laser_to_remove_uuid in game_lasers_uuids.iter() {
+                        // remove laser from the states map
+                        player_lasers_map.remove(laser_to_remove_uuid);
+
+                        // TODO: despawn the laser entity
+                        /*
+                        game_state
+                            .entity_lasers
+                            .get_mut(&player_uuid)
+                            .and_then(|entities_set| {
+                                Some(entities_set.insert(new_laser_entity_id))
+                            });
+                        */
+                    }
                 }
                 None => {}
             }

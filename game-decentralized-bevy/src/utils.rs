@@ -32,13 +32,36 @@ pub fn get_random_uuid() -> uuid::Uuid {
     uuid::Uuid::new_v4()
 }
 
+pub fn spawn_game_screen_instructions(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+) -> Entity {
+    let font = asset_server.load("entities/FiraMono-Medium.ttf");
+    let text_style = TextStyle {
+        font,
+        font_size: 15.0,
+        color: Color::PINK,
+    };
+    let text_alignment = TextAlignment::CENTER;
+    let box_size = Vec2::new(250.0, 100.0);
+    let box_position = Vec2::new(280.0, 250.0);
+    let text_2d_entity = commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::from_section("← → left/right, SPACE - shoot", text_style),
+            text_2d_bounds: Text2dBounds { size: box_size },
+            transform: Transform::from_xyz(box_position.x, box_position.y, 2.0),
+            ..default()
+        })
+        .id();
+    text_2d_entity
+}
+
 pub fn spawn_player_name_text2d_entity(
     commands: &mut Commands,
     asset_server: &Res<AssetServer>,
     player_name: &str,
     player_position: &Vec3,
 ) -> Entity {
-    // Demonstrate text wrapping
     let font = asset_server.load("entities/FiraMono-Medium.ttf");
     let text_style = TextStyle {
         font,
@@ -95,7 +118,7 @@ where
 }
 
 pub fn spawn_laser_closure(
-    mut commands: Commands,
+    commands: &mut Commands,
     laser_texture: Handle<Image>,
     state: PlayerLaserSerializedData,
 ) -> Entity {
