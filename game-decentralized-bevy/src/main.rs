@@ -350,10 +350,11 @@ fn entities_from_blockchain_update_system(
 
                     // get current in-memory player lasers map
                     let mut tree_map: BTreeMap<String, RemoteLaserState> = BTreeMap::new();
-                    let player_lasers_map = game_state
+                    let mut player_lasers_map = game_state
                         .remote_lasers
-                        .get_mut(&player_uuid)
-                        .unwrap_or_else(|| &mut tree_map);
+                        .get(&player_uuid)
+                        .unwrap_or_else(|| &mut tree_map)
+                        .clone();
 
                     // 3 options:
                     // - overwrite an existing state
@@ -365,17 +366,38 @@ fn entities_from_blockchain_update_system(
                         .cloned()
                         .map(|shot| shot.uuid)
                         .collect::<HashSet<String>>();
+                    //info!("---------------------");
+                    //info!("LASERS UPDATE (BEFORE INTERSEC) {:?}", &laser_shot_uuids);
 
                     let mut game_lasers_uuids = player_lasers_map
                         .keys()
                         .cloned()
                         .collect::<HashSet<String>>();
+                    //info!(
+                    //    "GAME LASERS (BEFORE INTERSEC) {:?}",
+                    //    &game_lasers_uuids
+                    //);
 
                     // -- still persisting lasers. Update values in the states map
                     let persisting_laser_uuids =
                         inplace_intersection(&mut laser_shot_uuids, &mut game_lasers_uuids);
+                    /*
+                    info!(
+                        "PERSISTING LASERS (AFTER INTERSEC)  {:?}",
+                        &persisting_laser_uuids
+                    );
+                    info!(
+                        "NEW LASERS (AFTER INTERSEC)  {:?}",
+                        &laser_shot_uuids
+                    );
+                    info!(
+                        "LASERS TO BE REMOVED (AFTER INTERSEC)  {:?}",
+                        &game_lasers_uuids
+                    );
+                    */
 
                     for persisting_laser_uuid in persisting_laser_uuids.iter() {
+                        //info!("@@ UPDATING PERSISTING LASER");
                         // get the new recurring state from the sent update
                         let laser_shot_new_state = lasers_shot
                             .iter()
@@ -398,6 +420,7 @@ fn entities_from_blockchain_update_system(
 
                     // -- laser_shot_uuids must now have the reduced states => only new lasers, create them
                     for laser_shot_uuid in laser_shot_uuids.iter() {
+                        //info!("@@ CREATING NEW LASER");
                         // get the new laser state from the sent update
                         let laser_shot_new_state = lasers_shot
                             .iter()
@@ -438,6 +461,7 @@ fn entities_from_blockchain_update_system(
 
                     // -- game_lasers_uuids must now have the reduced states => old lasers to be deleted
                     for laser_to_remove_uuid in game_lasers_uuids.iter() {
+                        //info!("@@ REMOVING LASER");
                         // remove laser from the states map
                         player_lasers_map.remove(laser_to_remove_uuid);
 
@@ -451,6 +475,11 @@ fn entities_from_blockchain_update_system(
                             });
                         */
                     }
+
+                    game_state
+                        .remote_lasers
+                        .insert(player_uuid, player_lasers_map);
+                    //info!("---------------------");
                 }
                 None => {}
             }
