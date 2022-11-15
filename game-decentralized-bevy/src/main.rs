@@ -110,7 +110,9 @@ fn main() {
             .with_system(interpolate_blockchain_players_state_system)
             .with_system(interpolate_blockchain_lasers_state_system)
             .with_system(player_tag_animation_system)
-            .with_system(player_collectible_collision_system)
+            .with_system(local_player_collectible_collision_system)
+            .with_system(local_player_remote_enemy_lasers_collision_system) // our player getting hit by enemy lasers
+            .with_system(remote_player_local_lasers_collision_system) // rendered remote player getting hit by my lasers
             .with_system(explosion_to_spawn_system)
             .with_system(explosion_animation_system),
     );
@@ -229,6 +231,11 @@ fn entities_from_blockchain_update_system(
                             commands
                                 .entity(text2d_entity)
                                 .insert(AnimateNameTranslation(local_player_entity));
+
+                            // map local player uuid - entity id
+                            game_state
+                                .entity_players
+                                .insert(player_added.uuid.clone(), local_player_entity);
 
                             // add player tag to resources
                             game_state.add_new_player_tag(&player_added.uuid, text2d_entity);
@@ -555,7 +562,7 @@ fn interpolate_blockchain_players_state_system(
     }
 }
 
-fn player_collectible_collision_system(
+fn local_player_collectible_collision_system(
     mut commands: Commands,
     mut game_state: ResMut<RemoteGameState>,
     collectibles_query: Query<(Entity, &Transform, &SpriteSize, &Collectible), With<Collectible>>,
@@ -606,6 +613,118 @@ fn player_collectible_collision_system(
                 commands
                     .spawn()
                     .insert(ExplosionToSpawn(collectible_tf.translation.clone()));
+            }
+        }
+    }
+}
+
+fn local_player_remote_enemy_lasers_collision_system(
+    mut commands: Commands,
+    mut game_state: ResMut<RemoteGameState>,
+    lasers_query: Query<(Entity, &Transform, &SpriteSize, &RemoteLaser), With<RemoteLaser>>,
+    players_query: Query<(Entity, &Transform, &SpriteSize, &LocalPlayer), (With<LocalPlayer>)>,
+) {
+    let mut despawned_entities: HashSet<Entity> = HashSet::new();
+
+    // iterate through the lasers
+    for (laser_entity, laser_tf, laser_size, laser_id) in lasers_query.iter() {
+        if despawned_entities.contains(&laser_entity) {
+            continue;
+        }
+
+        let laser_scale = Vec2::from(laser_tf.scale.xy());
+
+        // iterate through the players
+        for (player_entity, player_tf, player_size, local_player) in players_query.iter() {
+            if despawned_entities.contains(&player_entity)
+                || despawned_entities.contains(&laser_entity)
+            {
+                continue;
+            }
+            let player_scale = Vec2::from(player_tf.scale.xy());
+
+            // determine if collision
+            let collision = collide(
+                laser_tf.translation,
+                laser_size.0 * laser_scale,
+                player_tf.translation,
+                player_size.0 * player_scale,
+            );
+
+            // perform collision
+            if let Some(_) = collision {
+                // remove the laser
+                commands.entity(laser_entity).despawn();
+                despawned_entities.insert(laser_entity);
+
+                // remote the hit player
+                let hit_player = game_state.entity_players.get(&local_player.0);
+                if let Some(hit_entity) = hit_player {
+                    commands.entity(*hit_entity).despawn();
+                }
+
+                // spawn the explosionToSpawn
+                commands
+                    .spawn()
+                    .insert(ExplosionToSpawn(laser_tf.translation.clone()));
+
+                break;
+            }
+        }
+    }
+}
+
+fn remote_player_local_lasers_collision_system(
+    mut commands: Commands,
+    mut game_state: ResMut<RemoteGameState>,
+    lasers_query: Query<(Entity, &Transform, &SpriteSize, &LocalLaser), With<LocalLaser>>,
+    players_query: Query<(Entity, &Transform, &SpriteSize, &RemotePlayer), (With<RemotePlayer>)>,
+) {
+    let mut despawned_entities: HashSet<Entity> = HashSet::new();
+
+    // iterate through the lasers
+    for (laser_entity, laser_tf, laser_size, laser_id) in lasers_query.iter() {
+        if despawned_entities.contains(&laser_entity) {
+            continue;
+        }
+
+        let laser_scale = Vec2::from(laser_tf.scale.xy());
+
+        // iterate through the players
+        for (player_entity, player_tf, player_size, local_player) in players_query.iter() {
+            if despawned_entities.contains(&player_entity)
+                || despawned_entities.contains(&laser_entity)
+            {
+                continue;
+            }
+            let player_scale = Vec2::from(player_tf.scale.xy());
+
+            // determine if collision
+            let collision = collide(
+                laser_tf.translation,
+                laser_size.0 * laser_scale,
+                player_tf.translation,
+                player_size.0 * player_scale,
+            );
+
+            // perform collision
+            if let Some(_) = collision {
+                // remove the laser
+                commands.entity(laser_entity).despawn();
+                despawned_entities.insert(laser_entity);
+
+                // remote the hit player
+                let hit_player = game_state.entity_players.get(&local_player.0);
+                if let Some(hit_entity) = hit_player {
+                    commands.entity(*hit_entity).despawn();
+                }
+
+                // spawn the explosionToSpawn
+                commands
+                    .spawn()
+                    .insert(ExplosionToSpawn(laser_tf.translation.clone()));
+
+                break;
             }
         }
     }
