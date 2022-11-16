@@ -35,8 +35,8 @@ export const networks = {
     label: 'Labnet',
   },
   IMMONET: {
-    value: 'IMMONET',
-    label: 'Immonet',
+    value: 'INNONET',
+    label: 'Innonet',
   }
 }
 
