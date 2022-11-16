@@ -1,9 +1,13 @@
 # starship-game
 Decentralized game server example on the Massa Blockchain
 
+## Single Player Mode
 ![Single player mode](./pics/single-player.png)
+
+## Multi Player Mode
 ![Multi player mode](./pics/multi-player.png)
 
+## Repo structure
 There are separate READMEs for each of the game components:
 - [smart-contracts](./smart_contracts/README.md)
 - [game-engine](./game-decentralized-bevy/README.md)
