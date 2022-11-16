@@ -75,6 +75,20 @@ pub fn get_player_w() -> f32 {
 
 // ========================================================================================== //
 
+// Local single thread recording player lasers on every frame RUST -> JS
+thread_local!(pub static LOCAL_PLAYER_LASERS: RefCell<Option<String>> = RefCell::new(None));
+
+// a method callable from js to get player x lasers state (serialized)
+#[wasm_bindgen]
+pub fn get_player_lasers() -> Option<String> {
+    LOCAL_PLAYER_LASERS.with(|pos| {
+        let x = &*pos.borrow();
+        x.clone()
+    })
+}
+
+// ========================================================================================== //
+
 // A JS < -- > RUST mapped object
 #[wasm_bindgen(module = "src/app/GameEntity.ts")]
 extern "C" {
@@ -84,14 +98,7 @@ extern "C" {
     #[wasm_bindgen(constructor)]
     fn new_player(
         operation: String,
-        uuid: String,
-        address: String,
-        name: String,
-        x: f32,
-        y: f32,
-        rot: f32,
-        w: f32,
-        r#type: String,
+        data: String,
     ) -> GameEntityUpdate;
 
     // --------OPERATION--------------- //
@@ -104,75 +111,15 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = get_operation)]
     fn get_operation(this: &GameEntityUpdate) -> String;
 
-    // --------UUID--------------- //
-    #[wasm_bindgen(method, setter, js_name = set_uuid)]
-    fn set_uuid(
+    // --------DATA--------------- //
+    #[wasm_bindgen(method, setter, js_name = set_data)]
+    fn set_data(
         this: &GameEntityUpdate,
         value: String,
     );
 
-    #[wasm_bindgen(method, getter, js_name = get_uuid)]
-    fn get_uuid(this: &GameEntityUpdate) -> String;
-
-    // ----------ADDRESS------------- //
-    #[wasm_bindgen(method, setter, js_name = set_address)]
-    fn set_address(
-        this: &GameEntityUpdate,
-        value: String,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_address)]
-    fn get_address(this: &GameEntityUpdate) -> Option<String>;
-
-    // ----------NAME------------- //
-    #[wasm_bindgen(method, setter, js_name = set_name)]
-    fn set_name(
-        this: &GameEntityUpdate,
-        value: String,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_name)]
-    fn get_name(this: &GameEntityUpdate) -> Option<String>;
-
-    // -----------X------------ //
-    #[wasm_bindgen(method, setter, js_name = set_x)]
-    fn set_x(
-        this: &GameEntityUpdate,
-        value: f32,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_x)]
-    fn get_x(this: &GameEntityUpdate) -> Option<f32>;
-
-    // ----------Y------------- //
-    #[wasm_bindgen(method, setter, js_name = set_y)]
-    fn set_y(
-        this: &GameEntityUpdate,
-        value: f32,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_y)]
-    fn get_y(this: &GameEntityUpdate) -> Option<f32>;
-
-    // ---------ROT-------------- //
-    #[wasm_bindgen(method, setter, js_name = set_rot)]
-    fn set_rot(
-        this: &GameEntityUpdate,
-        value: f32,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_rot)]
-    fn get_rot(this: &GameEntityUpdate) -> Option<f32>;
-
-    // ---------W-------------- //
-    #[wasm_bindgen(method, setter, js_name = set_w)]
-    fn set_w(
-        this: &GameEntityUpdate,
-        value: f32,
-    );
-
-    #[wasm_bindgen(method, getter, js_name = get_w)]
-    fn get_w(this: &GameEntityUpdate) -> Option<f32>;
+    #[wasm_bindgen(method, getter, js_name = get_data)]
+    fn get_data(this: &GameEntityUpdate) -> String;
 }
 
 // local communication thread between js and the game engine [JS (write) --> RUST game loop (read)]

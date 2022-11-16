@@ -1,11 +1,10 @@
 /* eslint-disable max-len */
-/* Smart Contract Implementation of the Starship Game Logic
+/* Smart Contract Implementation of the Starship Multiplayer Game Server
  *
  * */
 import {
   Storage,
   Address,
-  unsafeRandom,
   Context,
   currentPeriod,
   currentThread,
@@ -15,93 +14,83 @@ import {
   collections,
   env,
 } from '@massalabs/massa-as-sdk/assembly';
-import {Amount} from '@massalabs/as/assembly';
-import {Rectangle, _isIntersection} from './rectangle';
-import {PlayerEntity} from './playerEntity';
-import {CollectibleEntity} from './collectibleEntity';
-import {CollectedEntity} from './collectedEntity';
-import {GameEvent} from './gameEvent';
-import {RegisterPlayerRequest} from './RegisterPlayerRequest';
+import {Amount, Currency} from '@massalabs/as/assembly';
+import {Rectangle, _isIntersection} from './utils/rectangle';
+import {PlayerEntity} from './entities/playerEntity';
+import {CollectibleEntity} from './entities/collectibleEntity';
+import {CollectedEntityEvent} from './events/collectedEntityEvent';
+import {_formatGameEvent, _generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
+import {RegisterPlayerRequest} from './requests/RegisterPlayerRequest';
+import {PlayerTokenCollected} from './playerTokenCollected';
+import {_generateUuid, _randomCoordInRange, _randomUintInRange} from './utils/random';
+import {ACTIVE_PLAYERS_ADDRESSES_KEY,
+  ACTIVE_PLAYERS_KEY,
+  COLLECTIBLE_BOUNDING_BOX,
+  COLLECTIBLE_VALUE,
+  GAME_OWNER_ADDRESS_ADDED,
+  GENERATED_TOKENS_COUNT_KEY,
+  GENERATED_TOKENS_MAP_KEY,
+  LAST_SLOT_INDEX_KEY,
+  MAX_PLAYERS_KEY,
+  OWNER_ADDRESS_KEY,
+  PLAYER_ADDED,
+  PLAYER_BOUNDING_BOX,
+  PLAYER_REMOVED,
+  REGISTERED_PLAYERS_EXECUTORS_MAP_KEY,
+  REGISTERED_PLAYERS_LASERS_MAP_KEY,
+  REGISTERED_PLAYERS_MAP_KEY,
+  REGISTERED_PLAYERS_STATES_MAP_KEY,
+  REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY,
+  REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY,
+  SCREEN_HEIGHT_ADJUSTED,
+  SCREEN_HEIGHT_KEY,
+  SCREEN_WIDTH_ADJUSTED,
+  SCREEN_WIDTH_KEY,
+  THREADS,
+  TOKEN_ADDED,
+  TOKEN_ADDRESS_ADDED,
+  TOKEN_ADDRESS_KEY,
+  TOKEN_COLLECTED,
+  TOKEN_REMOVED,
+  TOTAL_ONSCREEN_TOKENS} from './config';
+import {SetPlayerLaserRequest} from './requests/SetPlayerLaserRequest';
 
-// storage keys
-const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
-const REGISTERED_PLAYERS_STATES_MAP_KEY = 'registered_players_states_key';
-const REGISTERED_PLAYERS_TOKENS_MAP_KEY = 'registered_players_tokens_key';
-const GENERATED_TOKENS_MAP_KEY = 'generated_tokens_key';
-const OWNER_ADDRESS_KEY = 'owner_key';
-const LAST_SLOT_INDEX_KEY = 'last_slot_index_key';
-const TOKEN_ADDRESS_KEY = 'token_address_key';
-const GENERATED_TOKENS_COUNT_KEY = 'state_key';
-const SCREEN_WIDTH_KEY = 'screen_width_key';
-const SCREEN_HEIGHT_KEY = 'screen_height_key';
-const MAX_PLAYERS_KEY = 'max_players_key';
-const ACTIVE_PLAYERS_KEY = 'active_players_key';
-const ACTIVE_PLAYERS_ADDRESSES_KEY = 'active_players_addresses_key';
+export {_generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
 
-// events
-
-// game owner
-const TOKEN_ADDRESS_ADDED = 'TOKEN_ADDRESS_ADDED';
-const GAME_OWNER_ADDRESS_ADDED = 'GAME_OWNER_ADDRESS_ADDED';
-
-// player
-const PLAYER_ADDED = 'PLAYER_ADDED';
-const PLAYER_REMOVED = 'PLAYER_REMOVED';
-const PLAYER_MOVED = 'PLAYER_MOVED';
-
-// tokens
-const TOKEN_ADDED = 'TOKEN_ADDED';
-const TOKEN_REMOVED = 'TOKEN_REMOVED';
-const TOKEN_COLLECTED = 'TOKEN_COLLECTED';
-
-// screen
-const SCREEN_WIDTH_ADJUSTED = 'SCREEN_WIDTH_ADJUSTED';
-const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
-
-// settings
-const THREADS: u8 = 32;
-const TOTAL_ONSCREEN_TOKENS: u16 = 10;
-const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
-const PLAYER_BOUNDING_BOX: f32 = 64.0;
-const COLLECTIBLE_VALUE: Amount = new Amount(1);
-
-// registered players map
+// registered players map [player_address - bool]
 export const registeredPlayers = new collections.PersistentMap<string, boolean>(
     REGISTERED_PLAYERS_MAP_KEY
 );
 
-// registered players states map
+// registered players states map [player_address - player entity (serialized)]
 export const playerStates = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_STATES_MAP_KEY
 );
 
-// registered players tokens map (player address - token info)
-export const playerTokens = new collections.PersistentMap<string, string>(
-    REGISTERED_PLAYERS_TOKENS_MAP_KEY
+// player lasers states map [player_address - player lasers (serialized)]
+export const playerLaserStates = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_LASERS_MAP_KEY
 );
 
-// generated tokens map (token Index - token data)
+// registered players tokens map [player_address - token count (number)]
+export const playerTokensCount = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY
+);
+
+// registered players tokens uuids map [player_address - vec![token uuids (string)] serialized]
+export const playerTokensUuids = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY
+);
+
+// registered players executor secret keys map [player_address - vec![secret keys (, separated)]]
+export const playerExecutors = new collections.PersistentMap<string, string>(
+    REGISTERED_PLAYERS_EXECUTORS_MAP_KEY
+);
+
+// generated tokens map (token_index - token_data)
 export const generatedTokens = new collections.PersistentMap<u16, string>(
     GENERATED_TOKENS_MAP_KEY
 );
-
-/**
- * Generates a random uuid.
- * @return {string} uuid as string
- */
-function _generateUuid(): string {
-  return `uuid-${(<i64>Math.abs(<f64>unsafeRandom())).toString()}`;
-}
-
-/**
- * Returns if the Player Address has been registered or not.
- * @param {string} gameEventName - Address of the player.
- * @param {string} gameEventData - Address of the player.
- * @return {string} the formatted game event.
- */
-function _formatGameEvent(gameEventName: string, gameEventData: string): string {
-  return `${gameEventName}=${gameEventData}`;
-}
 
 /**
  * Returns if the Player Address has been registered or not.
@@ -211,11 +200,12 @@ export function getMaximumPlayersCount(_args: string): string {
  */
 export function setScreenWidth(screenWidth: string): void {
   // check that the caller is the game owner
+  assert(Context.caller().isValid(), 'Caller in setScreenWidth must be valid');
   assert(_assertGameOwner(Context.caller()));
   Storage.set(SCREEN_WIDTH_KEY, screenWidth);
 
-  // send event to all players
-  _generateEvent(_formatGameEvent(SCREEN_WIDTH_ADJUSTED, screenWidth));
+  // send async vent to all players
+  _generateAsyncEvent(_formatGameEvent(SCREEN_WIDTH_ADJUSTED, screenWidth));
 }
 
 /**
@@ -224,11 +214,12 @@ export function setScreenWidth(screenWidth: string): void {
  */
 export function setScreenHeight(screenHeight: string): void {
   // check that the caller is the game owner
+  assert(Context.caller().isValid(), 'Caller in setScreenHeight must be valid');
   assert(_assertGameOwner(Context.caller()));
   Storage.set(SCREEN_HEIGHT_KEY, screenHeight);
 
-  // send event to all players
-  _generateEvent(_formatGameEvent(SCREEN_HEIGHT_ADJUSTED, screenHeight));
+  // send async event to all players
+  _generateAsyncEvent(_formatGameEvent(SCREEN_HEIGHT_ADJUSTED, screenHeight));
 }
 
 /**
@@ -240,8 +231,8 @@ export function addTokenAddress(tokenAddress: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(TOKEN_ADDRESS_KEY, tokenAddress.toString());
 
-  // send event to all players
-  _generateEvent(_formatGameEvent(TOKEN_ADDRESS_ADDED, tokenAddress.toString()));
+  // send async event to all players
+  _generateAsyncEvent(_formatGameEvent(TOKEN_ADDRESS_ADDED, tokenAddress.toString()));
 }
 
 /**
@@ -266,8 +257,8 @@ export function addGameOwnerAddress(_args: string): void {
   assert(_assertGameOwner(Context.caller()));
   Storage.set(OWNER_ADDRESS_KEY, Context.caller().toByteString());
 
-  // send event to all players
-  _generateEvent(_formatGameEvent(GAME_OWNER_ADDRESS_ADDED, Context.caller().toByteString()));
+  // send async event to all players
+  _generateAsyncEvent(_formatGameEvent(GAME_OWNER_ADDRESS_ADDED, Context.caller().toByteString()));
 }
 
 /**
@@ -344,6 +335,9 @@ export function registerPlayer(args: string): void {
   const currentPlayersCount = parseInt(Storage.get(ACTIVE_PLAYERS_KEY), 10);
   Storage.set(ACTIVE_PLAYERS_KEY, (currentPlayersCount + 1).toString());
 
+  // save player's executors
+  playerExecutors.set(addr.toByteString(), playerRegisterRequest.executors);
+
   // add player address to the list of active players (separated by comma)
   let updatedPlayersAddresses = '';
   if (Storage.has(ACTIVE_PLAYERS_ADDRESSES_KEY)) {
@@ -357,11 +351,11 @@ export function registerPlayer(args: string): void {
   // generate a message
   const eventMessage = _formatGameEvent(PLAYER_ADDED, serializedPlayerData);
 
-  // send event from caller
+  // send event from caller as a function return value
   generateEvent(eventMessage);
 
-  // send event from sc to all players
-  _generateEvent(eventMessage);
+  // send async event from sc to all players
+  _generateAsyncEvent(eventMessage);
 }
 
 /**
@@ -385,9 +379,10 @@ export function removePlayer(address: string): void {
 
   // mark player as registered and delete all of its tokens and states
   registeredPlayers.delete(addr.toByteString());
+  playerExecutors.delete(addr.toByteString());
   playerStates.delete(addr.toByteString());
-  if (playerTokens.get(addr.toByteString())) {
-    playerTokens.delete(addr.toByteString());
+  if (playerTokensCount.get(addr.toByteString())) {
+    playerTokensCount.delete(addr.toByteString());
   }
 
   // decrease active players count
@@ -412,11 +407,11 @@ export function removePlayer(address: string): void {
   // generate a message
   const eventMessage = _formatGameEvent(PLAYER_REMOVED, playerEntity.serializeToString());
 
-  // send event from caller
+  // send event from caller as a func return value
   generateEvent(eventMessage);
 
-  // send event to all players
-  _generateEvent(eventMessage);
+  // send async event to all players
+  _generateAsyncEvent(eventMessage);
 }
 
 /**
@@ -444,10 +439,51 @@ export function setAbsCoors(_args: string): void {
   );
 
   // check if player has collected a token based on his pos
-  // _checkTokenCollectedAsync(serializedPlayerData);
+  const intersectionState: PlayerTokenCollected = {
+    playerState: serializedPlayerData,
+    tokensState: serializeCollectiblesState(),
+  } as PlayerTokenCollected;
+
+  // run an async function to check for collected tokens
+  _checkTokenCollectedAsync(intersectionState.serializeToString());
 
   // send event
   // _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
+}
+
+/**
+ * Sets the player's lasers data at a given time T
+ *
+ * @param {string} _args - stringified PlayArgs.
+ */
+export function setLaserPos(_args: string): void {
+  // read player abs coords
+  const playerLaserUpdate = SetPlayerLaserRequest.parseFromString(_args);
+  // check that player is already registered
+  assert(
+      _isPlayerRegistered(new Address(playerLaserUpdate.playerAddress)),
+      'Player has not been registered'
+  );
+
+  // TODO: verify that is one of the player signing addresses (thread addresses) and the update is for the player address + uuid
+  // also verify coords ????
+
+  // update storage
+  playerLaserStates.set(
+      playerLaserUpdate.playerAddress,
+      playerLaserUpdate.serializeToString()
+  );
+
+  /* TODOOOOO parse the data, check collisions emit events to other players
+  // check if player has collected a token based on his pos
+  const intersectionState: PlayerTokenCollected = {
+    playerState: serializedPlayerData, // TODO: remove the sending player's state data
+    tokensState: serializeCollectiblesState(),
+  } as PlayerTokenCollected;
+
+  // run an async function to check for collected tokens
+  _checkLasersHitAsync(intersectionState.serializeToString()); TODO: send a kill message so that the game ends!
+  */
 }
 
 /**
@@ -462,6 +498,41 @@ export function getPlayerPos(address: string): string {
   // check that player is already registered
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
   const res = <string>playerStates.get(playerAddress.toByteString());
+  // generate a normal event as a func return value
+  generateEvent(`${res}`);
+  return res;
+}
+
+/**
+ * Returns the player lasers state.
+ *
+ * @param {string} address - Address of the player.
+ * @return {string} - the player lasers state (stringified).
+ */
+export function getPlayerLasers(address: string): string {
+  // get player address
+  const playerAddress = Address.fromByteString(address);
+  // check that player is already registered
+  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
+  const res = <string>playerLaserStates.get(playerAddress.toByteString());
+  // generate a normal event as a func return value
+  generateEvent(`${res}`);
+  return res;
+}
+
+/**
+ * Returns the player executors.
+ *
+ * @param {string} address - Address of the player.
+ * @return {string} - the player executors as a string sep by commas.
+ */
+export function getPlayerExecutors(address: string): string {
+  // get player address
+  const playerAddress = Address.fromByteString(address);
+  // check that player is already registered
+  assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
+  const res = <string>playerExecutors.get(playerAddress.toByteString());
+  // generate a normal event as a func return value
   generateEvent(`${res}`);
   return res;
 }
@@ -478,9 +549,9 @@ export function getPlayerTokens(address: string): string {
   // check that player is already registered
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
   // get player tokens from collections
-  const tokens = playerTokens.get(playerAddress.toByteString());
-  const tokensCount = tokens ? parseInt(tokens, 10) : 0;
-  // return player tokens
+  const tokens = playerTokensCount.get(playerAddress.toByteString());
+  const tokensCount = tokens ? parseFloat(tokens) : 0.0;
+  // generate a normal event as a func return value
   generateEvent(`${tokensCount.toString()}`);
   return tokensCount.toString();
 }
@@ -503,8 +574,9 @@ export function getPlayerBalance(address: string): string {
 
   // get massa coin impl wrapper
   const collToken = new token.TokenWrapper(tokenAddress);
-  // return player balance
+  // get player balance
   const res = collToken.balanceOf(playerAddress).value().toString();
+  // generate a normal event as a func return value
   generateEvent(`${res}`);
   return res;
 }
@@ -515,14 +587,49 @@ export function getPlayerBalance(address: string): string {
  * @return {string} - the stringified massa tokens state.
  */
 export function getCollectiblesState(_args: string): string {
+  const res = serializeCollectiblesState();
+  // generate a normal event as a func return value
+  generateEvent(`${res}`);
+  return res;
+}
+
+/**
+ * Returns the massa tokens state.
+ * @return {string} - the stringified massa tokens state.
+ */
+function serializeCollectiblesState(): string {
   const generatedRandomTokens: Array<string> = [];
   for (let tokenIndex: u16 = 0; tokenIndex < TOTAL_ONSCREEN_TOKENS; tokenIndex++) {
     const randomCollectibleEntity = generatedTokens.get(tokenIndex);
     generatedRandomTokens.push(randomCollectibleEntity as string);
   }
   const res = generatedRandomTokens.join('@');
-  generateEvent(`${res}`);
   return res;
+}
+
+/**
+ * Returns the massa tokens state.
+ * @param {string} args - ?
+ * @return {collections.PersistentMap<u16, string>} - the stringified massa tokens state.
+ */
+function deserializeCollectiblesState(args: string): collections.PersistentMap<u16, string> {
+  const map: collections.PersistentMap<u16, string> = new collections.PersistentMap<u16, string>(_generateUuid());
+  const serializedTokensState = args.split('@');
+
+  for (let tokenIndex: u16 = 0; tokenIndex < <u16>serializedTokensState.length; tokenIndex++) {
+    map.set(tokenIndex, serializedTokensState[tokenIndex]);
+  }
+  return map;
+}
+
+/**
+ * Returns the massa tokens state.
+ * @param {collections.PersistentMap<u16, string>} map - the stringified massa tokens state.
+ */
+function cleanCollectiblesState(map: collections.PersistentMap<u16, string>): void {
+  for (let tokenIndex: u16 = 0; tokenIndex < map.size(); tokenIndex++) {
+    map.delete(tokenIndex);
+  }
 }
 
 /**
@@ -530,57 +637,97 @@ export function getCollectiblesState(_args: string): string {
  *
  * @param {Entity} args - Position of the player.
  */
-export function _checkTokenCollected(args: string): void { // TODO: fix me! also pass the tokens state at the time of evaluation
+export function _checkTokenCollected(args: string): void {
   // check that the caller is the contract itself
+  assert(Context.callee().isValid(), 'Callee in _checkTokenCollected must be valid');
+  assert(Context.caller().isValid(), 'Caller in _checkTokenCollected must be valid');
   assert(Context.callee().equals(Context.caller()));
 
-  // retrieve the player entity
-  const playerPos = PlayerEntity.parseFromString(args);
+  const playerTokensState = PlayerTokenCollected.parseFromString(args);
+  const serializedPlayerState = playerTokensState.playerState;
+  const serializedTokensState = playerTokensState.tokensState;
 
+  // retrieve the player entity
+  const playerPos = PlayerEntity.parseFromString(serializedPlayerState);
+
+  // retrieve the tokens state
+  const tokensStateAtState: collections.PersistentMap<u16, string> = deserializeCollectiblesState(serializedTokensState);
+
+  const playerCboxFrame: f32 = playerPos.cbox/2.0;
+
+  // evaluate the player bounding box
   const playerCbox = new Rectangle(
-      playerPos.x - playerPos.cbox,
-      playerPos.x + playerPos.cbox,
-      playerPos.y + playerPos.cbox,
-      playerPos.y - playerPos.cbox
+      playerPos.x - playerCboxFrame,
+      playerPos.x + playerCboxFrame,
+      playerPos.y + playerCboxFrame,
+      playerPos.y - playerCboxFrame
   );
 
-  for (let i: u16 = 0; i < TOTAL_ONSCREEN_TOKENS; i++) {
+  // loop over all tokens and find intersections
+  for (let i: u16 = 0; i < tokensStateAtState.size(); i++) {
     const collectibleEntity = CollectibleEntity.parseFromString(
-        <string>generatedTokens.get(i)
+        <string>tokensStateAtState.get(i)
     );
+    const collectibleCboxFrame: f32 = collectibleEntity.cbox/2.0;
     const collectibleCbox = new Rectangle(
-        collectibleEntity.x - collectibleEntity.cbox,
-        collectibleEntity.x + collectibleEntity.cbox,
-        collectibleEntity.y + collectibleEntity.cbox,
-        collectibleEntity.y - collectibleEntity.cbox
+        collectibleEntity.x - collectibleCboxFrame,
+        collectibleEntity.x + collectibleCboxFrame,
+        collectibleEntity.y + collectibleCboxFrame,
+        collectibleEntity.y - collectibleCboxFrame
     );
 
-    if (_isIntersection(playerCbox, collectibleCbox)) {
+    if (_isIntersection(collectibleCbox, playerCbox)) {
+      // check if the collectible has already been collected
+      let isAlreadyCollected = false;
+      let playerCollectedTokenUuids = playerTokensUuids.get(playerPos.address);
+      if (playerCollectedTokenUuids) {
+        const collectedUuids = playerCollectedTokenUuids.split(',');
+        for (let uuidIndex: i32 = 0; uuidIndex < collectedUuids.length; uuidIndex++) {
+          if (collectibleEntity.uuid === collectedUuids[uuidIndex]) {
+            isAlreadyCollected = true;
+          }
+        }
+        if (!isAlreadyCollected) {
+          playerCollectedTokenUuids = `${playerCollectedTokenUuids},${collectibleEntity.uuid}`;
+        }
+      } else {
+        playerCollectedTokenUuids = `${collectibleEntity.uuid}`;
+      }
+      playerTokensUuids.set(playerPos.address, playerCollectedTokenUuids);
+
+      // if already collected, return
+      if (isAlreadyCollected) {
+        return;
+      }
+
+      // transfer the token to the player
       _playerCollectibleClaim(
           new Address(playerPos.address),
-          new Amount(<u64>collectibleEntity.value)
+          <u64>collectibleEntity.value
       );
 
-      // add token to player collected tokens
-      const playerTokensCount = playerTokens.get(
+      // increase player collected tokens count
+      const playerTokensCountStr = playerTokensCount.get(
           playerPos.address
       );
-      const playerTokensNumber = (playerTokensCount ? parseInt(playerTokensCount, 10) : 0) + 1;
-      // add update back to hashmap
-      playerTokens.set(playerPos.address, playerTokensNumber.toString());
+      const playerTokensCountIncreased = (playerTokensCountStr ? parseFloat(playerTokensCountStr) : 0.0) + 1.0;
+      playerTokensCount.set(playerPos.address, playerTokensCountIncreased.toString());
 
       // append currently collected token to state
-      const collectedEntity: CollectedEntity = {
+      const collectedEntity: CollectedEntityEvent = {
         uuid: collectibleEntity.uuid,
         playerUuid: playerPos.uuid,
         value: collectibleEntity.value,
         time: env.env.time() as f64,
-      } as CollectedEntity;
+      } as CollectedEntityEvent;
 
       // generate an event and send to all players
       _sendGameEvent(_formatGameEvent(TOKEN_COLLECTED, collectedEntity.serializeToString()));
     }
   }
+
+  // deallocate the tokensState hashmap
+  cleanCollectiblesState(tokensStateAtState);
 }
 
 /**
@@ -591,14 +738,19 @@ export function _checkTokenCollected(args: string): void { // TODO: fix me! also
  */
 function _playerCollectibleClaim(
     playerAddress: Address,
-    collectibleValue: Amount
+    collectibleValue: u64
 ): void {
-  // transfer token to player
+  // get token address
   const tokenAddress = Address.fromByteString(Storage.get(TOKEN_ADDRESS_KEY));
+
   // get collectible impl wrapper
   const collToken = new token.TokenWrapper(tokenAddress);
+
+  // amount to send
+  const amountToSend = new Amount(collectibleValue, new Currency(collToken.name(), 2, true)); // TODO: use decimals here!
+
   // token transfers X amount to player
-  collToken.transfer(playerAddress, collectibleValue);
+  collToken.transfer(playerAddress, amountToSend);
 }
 
 /**
@@ -687,6 +839,8 @@ export function asyncCreateCollectibles(_args: string): void {
   );
 
   // make sure this func is calling itself or the game owner is calling it
+  assert(Context.callee().isValid(), 'Callee in asyncCreateCollectibles must be valid');
+  assert(Context.caller().isValid(), 'Caller in asyncCreateCollectibles must be valid');
   assert(
       Context.caller().equals(Context.callee()) ||
       Context.caller().equals(gameOwnerAddress),
@@ -715,18 +869,18 @@ export function asyncCreateCollectibles(_args: string): void {
   // update some random tokens with new ones
   const tokensToUpdate = _randomUintInRange(TOTAL_ONSCREEN_TOKENS);
   for (let i: u16 = 0; i < tokensToUpdate; i++) {
-    const randomCollectibleEntity: CollectibleEntity = _generateRandomCollectible(screenWidthF32, screenHeightF32);
-    const tokenIndex = _randomUintInRange(TOTAL_ONSCREEN_TOKENS - 1);
+    const randomTokenIndex = _randomUintInRange(TOTAL_ONSCREEN_TOKENS - 1);
 
     // get old token at index
-    const oldTokenAtIndex = generatedTokens.get(tokenIndex as u16);
+    const oldTokenAtIndex = generatedTokens.get(randomTokenIndex as u16);
     // send update to all players
-    _generateEvent(_formatGameEvent(TOKEN_REMOVED, oldTokenAtIndex as string));
+    _generateAsyncEvent(_formatGameEvent(TOKEN_REMOVED, oldTokenAtIndex as string));
 
     // generate a new token at random index and overwrite the old one
-    generatedTokens.set(tokenIndex as u16, randomCollectibleEntity.serializeToString());
+    const randomCollectibleEntity: CollectibleEntity = _generateRandomCollectible(screenWidthF32, screenHeightF32);
+    generatedTokens.set(randomTokenIndex as u16, randomCollectibleEntity.serializeToString());
     // send update to all players
-    _generateEvent(_formatGameEvent(TOKEN_ADDED, randomCollectibleEntity.serializeToString()));
+    _generateAsyncEvent(_formatGameEvent(TOKEN_ADDED, randomCollectibleEntity.serializeToString()));
   }
 
   // emit wakeup message
@@ -737,6 +891,7 @@ export function asyncCreateCollectibles(_args: string): void {
 
   // sc address
   const curAddr = Context.callee();
+  assert(curAddr.isValid(), 'Caller in asyncCreateCollectibles must be valid');
 
   // call recursively self
   sendMessage(
@@ -774,82 +929,6 @@ function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): Collec
   return posArgs;
 }
 
-/**
- * Generates a random value with a limiting upper range.
- *
- * @param {f32} range - limiting range.
- * @return {f32}- value scaled in range.
- */
-function _randomCoordInRange(range: f32): f32 {
-  const absRange = <i64>Math.abs(range);
-  const random: i64 = unsafeRandom();
-  const mod = random % absRange;
-  if (random > 0) {
-    return <f32>Math.abs(<f64>mod);
-  } else {
-    return <f32>Math.abs(<f64>mod) * -1.0; // <f32>Math.abs(<f64>mod) * -1.0 depending on the axis
-  }
-}
-
-/**
- * Generates a random value with a limiting upper range.
- *
- * @param {i64} range - limiting range.
- * @return {u64}- value scaled in range.
- */
-function _randomUintInRange(range: i64): u64 {
-  const random: i64 = unsafeRandom();
-  const mod = random % range;
-  return <u64>Math.abs(<f64>mod);
-}
-
-/**
- * Player collects a token.
- *
- * @param {string} data - Self-calling function for generating collectibles.
- */
-export function _sendGameEvent(data: string): void {
-  // check that the caller is the contract itself
-  assert(Context.callee().equals(Context.caller()));
-
-  const gameEvent: GameEvent = {
-    data,
-    time: <f64>env.env.time(), // unix time in milliseconds
-  } as GameEvent;
-  generateEvent(`${gameEvent.serializeToString()}`);
-}
-
-/**
- * Player collects a token.
- *
- * @param {string} data - Self-calling function for generating collectibles.
- */
-function _generateEvent(data: string): void {
-  const curThread = currentThread();
-  const curPeriod = currentPeriod();
-
-  let nextThread = curThread + 1;
-  let nextPeriod = curPeriod;
-  if (nextThread >= THREADS) {
-    ++nextPeriod;
-    nextThread = 0;
-  }
-  // sc address
-  const curAddr = Context.callee();
-
-  sendMessage(
-      curAddr,
-      '_sendGameEvent',
-      nextPeriod, // validityStartPeriod
-      nextThread, // validityStartThread
-      nextPeriod + 5, // validityEndPeriod
-      nextThread, // validityEndThread
-      70000000,
-      0,
-      0,
-      data
-  );
-}
 
 /**
  * Player collects a token.
@@ -868,6 +947,7 @@ function _checkTokenCollectedAsync(data: string): void {
   }
   // sc address
   const curAddr = Context.callee();
+  assert(Context.callee().isValid(), 'Callee in _checkTokenCollectedAsync must be valid');
 
   sendMessage(
       curAddr,

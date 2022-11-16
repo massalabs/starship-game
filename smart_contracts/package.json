@@ -5,6 +5,7 @@
   "scripts": {
     "deploy-token": "ts-node ./deploy-token.ts",
     "deploy-game": "ts-node ./deploy-game.ts",
+    "fund-game": "ts-node ./fund-game.ts",
     "deploy-website": "ts-node ./deploy-website.ts",
     "test-game": "ts-node ./test-game.ts",
     "test-events": "ts-node ./test-events.ts",
