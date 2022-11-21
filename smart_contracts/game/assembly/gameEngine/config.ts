@@ -5,6 +5,8 @@ import {Amount} from '@massalabs/as/assembly';
 export const REGISTERED_PLAYERS_MAP_KEY = 'registered_players_map_key';
 export const REGISTERED_PLAYERS_STATES_MAP_KEY = 'registered_players_states_key';
 export const REGISTERED_PLAYERS_LASERS_MAP_KEY = 'registered_players_lasers_key';
+export const LASER_STATES_MAP_KEY = 'laser_states_key';
+export const SPAWNED_LASER_INTERPOLATIONS_KEY = 'spawned_laser_interpolations_key';
 export const REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY = 'registered_players_token_counts_key';
 export const REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY = 'registered_players_token_uuids_key';
 export const REGISTERED_PLAYERS_EXECUTORS_MAP_KEY = 'registered_players_executors_key';

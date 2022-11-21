@@ -81,12 +81,15 @@ pub enum RemoteStateType {
 
 #[derive(Clone)]
 pub struct RemoteGameState {
-    pub entity_lasers: BTreeMap<String, HashSet<Entity>>, // [player uuid : laser entity] - both local and remote
-    pub entity_players: BTreeMap<String, Entity>, // [player uuid : game entity]  - both local and remote
-    pub entity_collectibles: BTreeMap<String, Entity>, // [player uuid : game entity]  - both local and remote
     pub entity_player_tags: BTreeMap<String, Entity>, // [player uuid : animation entity]  - both local and remote
+
+    pub entity_players: BTreeMap<String, Entity>, // [player uuid : entity uuid]  - both local and remote
     pub remote_players: BTreeMap<String, RemoteGamePlayerState>, // [player uuid - state mapping]
+
+    pub entity_collectibles: BTreeMap<String, Entity>, // [player uuid : entity uuid]  - both local and remote
     pub remote_collectibles: BTreeMap<String, RemoteCollectibleState>, // [player uuid - state mapping]
+
+    pub entity_lasers: BTreeMap<String, HashSet<Entity>>, // [player uuid : laser entity] - both local and remote
     pub remote_lasers: BTreeMap<String, BTreeMap<String, RemoteLaserState>>, // [player uuid - [laser uuid: laser state mapping]]
 }
 

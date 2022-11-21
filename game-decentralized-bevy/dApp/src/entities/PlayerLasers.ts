@@ -1,17 +1,15 @@
 /**
- * Blockchain Game Entity representation.
+ * Blockchain Game Laser representation.
  *
  */
 
-export interface IPlayerLasersRequest {
+export interface IPlayerLasersRequest extends IPlayerLaserData {
   playerAddress: string;
-  playerUuid: string;
-  lasersData: string;
   time: number;
 }
 
 export interface IPlayerLaserData {
-  player_uuid: string;
+  playerUuid: string;
   uuid: string;
   x: number;
   y: number;

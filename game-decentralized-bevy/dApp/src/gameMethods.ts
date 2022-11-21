@@ -382,7 +382,21 @@ export const getCollectiblesState = async (web3Client: Client, gameAddress: stri
   });
 }
 
-const formatNumbersToDecimalPrecision = (input: any): string => {
+export const getPlayerLasersUuids = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getPlayerLasersUuids",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+
+  return readTxData[0].output_events[0].data.split(",");
+}
+
+const stringifyAndFormatNumbers = (input: any): string => {
   for (let key of Object.keys(input)) {
     if (typeof input[key] === "number") input[key] = input[key].toFixed(2);
   }
@@ -390,7 +404,7 @@ const formatNumbersToDecimalPrecision = (input: any): string => {
 }
 
 export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerUpdate: IPlayerOnchainEntity): Promise<string|undefined> => {
-    //console.log("UPDATE ", formatNumbersToDecimalPrecision(playerUpdate));
+    //console.log("UPDATE ", stringifyAndFormatNumbers(playerUpdate));
   
     // evaluate thread from which to send
     let nodeStatusInfo: INodeStatus|null|undefined = null;
@@ -420,9 +434,9 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target smart contract address
         targetAddress: gameAddress,
         /// Target function name. No function is called if empty.
-        functionName: "setAbsCoors",
+        functionName: "setPlayerAbsCoors",
         /// Parameter to pass to the target function
-        parameter: formatNumbersToDecimalPrecision(playerUpdate)
+        parameter: stringifyAndFormatNumbers(playerUpdate)
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);
@@ -463,7 +477,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target function name. No function is called if empty.
         functionName: "setLaserPos",
         /// Parameter to pass to the target function
-        parameter: formatNumbersToDecimalPrecision(playerLasersUpdate)
+        parameter: stringifyAndFormatNumbers(playerLasersUpdate)
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);

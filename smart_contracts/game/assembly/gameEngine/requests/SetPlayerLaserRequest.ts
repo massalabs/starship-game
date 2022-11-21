@@ -6,7 +6,11 @@ import {JSON} from 'json-as/assembly';
 export class SetPlayerLaserRequest {
   playerAddress: string = '';
   playerUuid: string = '';
-  lasersData: string = ''; // format: "{player_uuid: string, uuid: string, x: number, y: number, rot: number, w: number}@{player_uuid: string, uuid: string, x: number, y: number, rot: number, w: number}"
+  uuid: string = '';
+  x: number = 0;
+  y: number = 0;
+  rot: number = 0;
+  w: number = 0;
   time: number = 0;
 
   serializeToString(): string {

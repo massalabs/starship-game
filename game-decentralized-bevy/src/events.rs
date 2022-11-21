@@ -1,11 +1,17 @@
 use bevy::prelude::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
+
+use crate::resources::RemoteLaserState;
 /// Event being sent out when the own player moves
 #[derive(Debug)]
 pub struct PlayerMoved {
     pub pos: Vec3,
     pub rot: Quat,
 }
+
+/// Event being sent out when the player fires a laser
+#[derive(Debug)]
+pub struct LaserShot(pub RemoteLaserState);
 
 // player game events
 pub const PLAYER_MOVED: &'static str = "PLAYER_MOVED";

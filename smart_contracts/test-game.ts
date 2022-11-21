@@ -175,7 +175,7 @@ import { IDatastoreEntryInput,
             parallelCoins: 0,
             sequentialCoins: 0,
             targetAddress: scAddress,
-            functionName: "setAbsCoors",
+            functionName: "setPlayerAbsCoors",
             parameter: `{"uuid":"uuid-9016063961940463616","address":"A12thhcEbzPJHw5vyKyJ3Kx3Y6EsvYbeopg6Vg9V8u52mbo2PVqG","x":-200.0,"y":200.0,"rot":90.0,"cbox":64.0,"tokensCollected":0.0}`,
         } as ICallData);
         const callScOperationId = callTxId[0];
@@ -359,7 +359,7 @@ import { IDatastoreEntryInput,
             parallelCoins: 0,
             sequentialCoins: 0,
             targetAddress: scAddress,
-            functionName: "setAbsCoors",
+            functionName: "setPlayerAbsCoors",
             parameter: `{"uuid":"uuid-9016063961940463616","address":"A12thhcEbzPJHw5vyKyJ3Kx3Y6EsvYbeopg6Vg9V8u52mbo2PVqG","x":-200.0,"y":200.0,"rot":90.0,"cbox":64.0,"tokensCollected":0.0}`,
         } as ICallData);
         const callScOperationId = callTxId[0];

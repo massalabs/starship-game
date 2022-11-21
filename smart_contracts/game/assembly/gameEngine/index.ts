@@ -30,6 +30,7 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   GAME_OWNER_ADDRESS_ADDED,
   GENERATED_TOKENS_COUNT_KEY,
   GENERATED_TOKENS_MAP_KEY,
+  LASER_STATES_MAP_KEY,
   LAST_SLOT_INDEX_KEY,
   MAX_PLAYERS_KEY,
   OWNER_ADDRESS_KEY,
@@ -46,6 +47,7 @@ import {ACTIVE_PLAYERS_ADDRESSES_KEY,
   SCREEN_HEIGHT_KEY,
   SCREEN_WIDTH_ADJUSTED,
   SCREEN_WIDTH_KEY,
+  SPAWNED_LASER_INTERPOLATIONS_KEY,
   THREADS,
   TOKEN_ADDED,
   TOKEN_ADDRESS_ADDED,
@@ -67,9 +69,19 @@ export const playerStates = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_STATES_MAP_KEY
 );
 
-// player lasers states map [player_address - player lasers (serialized)]
-export const playerLaserStates = new collections.PersistentMap<string, string>(
+// player lasers states map [player_address - player laser uuids (serialized) "uuid1,uuid2,..."]
+export const playerLaserUuids = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_LASERS_MAP_KEY
+);
+
+// player lasers states map [laser uuid - interpolated laser state (serialized)]
+export const laserStates = new collections.PersistentMap<string, string>(
+    LASER_STATES_MAP_KEY
+);
+
+// player lasers states map [laser uuid - bool]
+export const spawnedLaserInterpolators = new collections.PersistentMap<string, bool>(
+    SPAWNED_LASER_INTERPOLATIONS_KEY
 );
 
 // registered players tokens map [player_address - token count (number)]
@@ -77,17 +89,17 @@ export const playerTokensCount = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKEN_COUNTS_MAP_KEY
 );
 
-// registered players tokens uuids map [player_address - vec![token uuids (string)] serialized]
+// registered players tokens uuids map [player_address - player token uuids (serialized) "uuid1,uuid2,..."]
 export const playerTokensUuids = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_TOKEN_UUIDS_MAP_KEY
 );
 
-// registered players executor secret keys map [player_address - vec![secret keys (, separated)]]
+// registered players executor secret keys map [player_address - secret keys (serialized) "sk1,sk2,..."]
 export const playerExecutors = new collections.PersistentMap<string, string>(
     REGISTERED_PLAYERS_EXECUTORS_MAP_KEY
 );
 
-// generated tokens map (token_index - token_data)
+// generated tokens map [token_index - token data (serialized)]
 export const generatedTokens = new collections.PersistentMap<u16, string>(
     GENERATED_TOKENS_MAP_KEY
 );
@@ -419,7 +431,7 @@ export function removePlayer(address: string): void {
  *
  * @param {string} _args - stringified PlayArgs.
  */
-export function setAbsCoors(_args: string): void {
+export function setPlayerAbsCoors(_args: string): void {
   // read player abs coords
   const playerEntityUpdate = PlayerEntity.parseFromString(_args);
   // check that player is already registered
@@ -444,8 +456,10 @@ export function setAbsCoors(_args: string): void {
     tokensState: serializeCollectiblesState(),
   } as PlayerTokenCollected;
 
-  // run an async function to check for collected tokens
-  _checkTokenCollectedAsync(intersectionState.serializeToString());
+  // once moved, run an async function to check for player-token collisions
+  _checkTokensCollectedAsync(intersectionState.serializeToString());
+
+  // TODO: _checkLaserCollisionsAsync???
 
   // send event
   // _generateEvent(_formatGameEvent(PLAYER_MOVED, serializedPlayerData));
@@ -457,7 +471,7 @@ export function setAbsCoors(_args: string): void {
  * @param {string} _args - stringified PlayArgs.
  */
 export function setLaserPos(_args: string): void {
-  // read player abs coords
+  // read player laser update
   const playerLaserUpdate = SetPlayerLaserRequest.parseFromString(_args);
   // check that player is already registered
   assert(
@@ -468,22 +482,38 @@ export function setLaserPos(_args: string): void {
   // TODO: verify that is one of the player signing addresses (thread addresses) and the update is for the player address + uuid
   // also verify coords ????
 
-  // update storage
-  playerLaserStates.set(
-      playerLaserUpdate.playerAddress,
-      playerLaserUpdate.serializeToString()
-  );
+  // update the player uuids
+  let playerActiveLasersSerialized = playerLaserUuids.get(playerLaserUpdate.playerAddress);
+  if (playerActiveLasersSerialized) {
+    const currentActiveLaserUuids = playerActiveLasersSerialized.split(',');
+    for (let uuidIndex: i32 = 0; uuidIndex < currentActiveLaserUuids.length; uuidIndex++) {
+      let alreadyExists = false;
+      if (playerLaserUpdate.uuid === currentActiveLaserUuids[uuidIndex]) {
+        alreadyExists = true;
+      }
+      if (!alreadyExists) {
+        playerActiveLasersSerialized = `${playerActiveLasersSerialized},${playerLaserUpdate.uuid}`;
+      }
+    }
+  } else {
+    playerActiveLasersSerialized = `${playerLaserUpdate.uuid}`;
+  }
+  playerTokensUuids.set(playerLaserUpdate.playerAddress, playerActiveLasersSerialized);
 
-  /* TODOOOOO parse the data, check collisions emit events to other players
-  // check if player has collected a token based on his pos
-  const intersectionState: PlayerTokenCollected = {
-    playerState: serializedPlayerData, // TODO: remove the sending player's state data
-    tokensState: serializeCollectiblesState(),
-  } as PlayerTokenCollected;
+  // add the laser uuid to the laser states map if needed
+  if (!laserStates.contains(playerLaserUpdate.uuid)) {
+    laserStates.set(playerLaserUpdate.uuid, playerLaserUpdate.serializeToString());
+  }
 
-  // run an async function to check for collected tokens
-  _checkLasersHitAsync(intersectionState.serializeToString()); TODO: send a kill message so that the game ends!
-  */
+  // check for spawned async interpolator, if not, spawn one and mark it
+  if (!spawnedLaserInterpolators.contains(playerLaserUpdate.uuid) || !spawnedLaserInterpolators.get(playerLaserUpdate.uuid)) {
+    spawnedLaserInterpolators.set(playerLaserUpdate.uuid, true);
+
+    // run an async function to:
+    // 1. interpolate the laser movement
+    // 2. check for out-of-bound lasers and update state
+    _interpolateLaserMovementAsync(playerLaserUpdate.uuid);
+  }
 }
 
 /**
@@ -504,17 +534,17 @@ export function getPlayerPos(address: string): string {
 }
 
 /**
- * Returns the player lasers state.
+ * Returns the player lasers uuids.
  *
  * @param {string} address - Address of the player.
- * @return {string} - the player lasers state (stringified).
+ * @return {string} - the player lasers uuids (stringified as "uuid1,uuid2,uuid3,....").
  */
-export function getPlayerLasers(address: string): string {
+export function getPlayerLasersUuids(address: string): string {
   // get player address
   const playerAddress = Address.fromByteString(address);
   // check that player is already registered
   assert(_isPlayerRegistered(playerAddress), 'Player has not been registered');
-  const res = <string>playerLaserStates.get(playerAddress.toByteString());
+  const res = <string>playerLaserUuids.get(playerAddress.toByteString());
   // generate a normal event as a func return value
   generateEvent(`${res}`);
   return res;
@@ -637,10 +667,10 @@ function cleanCollectiblesState(map: collections.PersistentMap<u16, string>): vo
  *
  * @param {Entity} args - Position of the player.
  */
-export function _checkTokenCollected(args: string): void {
+export function _checkTokensCollected(args: string): void {
   // check that the caller is the contract itself
-  assert(Context.callee().isValid(), 'Callee in _checkTokenCollected must be valid');
-  assert(Context.caller().isValid(), 'Caller in _checkTokenCollected must be valid');
+  assert(Context.callee().isValid(), 'Callee in _checkTokensCollected must be valid');
+  assert(Context.caller().isValid(), 'Caller in _checkTokensCollected must be valid');
   assert(Context.callee().equals(Context.caller()));
 
   const playerTokensState = PlayerTokenCollected.parseFromString(args);
@@ -650,7 +680,7 @@ export function _checkTokenCollected(args: string): void {
   // retrieve the player entity
   const playerPos = PlayerEntity.parseFromString(serializedPlayerState);
 
-  // retrieve the tokens state
+  // retrieve the tokens state by deserializing (only temp)
   const tokensStateAtState: collections.PersistentMap<u16, string> = deserializeCollectiblesState(serializedTokensState);
 
   const playerCboxFrame: f32 = playerPos.cbox/2.0;
@@ -731,6 +761,20 @@ export function _checkTokenCollected(args: string): void {
 }
 
 /**
+ * Interpolates a given laser movement
+ *
+ * @param {Entity} args - Tha laser uuid
+ */
+export function _interpolateLaserMovement(args: string): void {
+  // check that the caller is the contract itself
+  assert(Context.callee().isValid(), 'Callee in _checkTokensCollected must be valid');
+  assert(Context.caller().isValid(), 'Caller in _checkTokensCollected must be valid');
+  assert(Context.callee().equals(Context.caller()));
+
+  // TODO: finish!
+}
+
+/**
  * Player collects a token.
  *
  * @param {Address} playerAddress - Address of the player.
@@ -776,7 +820,7 @@ export function initLastSlotIndex(_args: string): void {
 }
 
 /**
- * Stop creating collectibles.
+ * Initiates the token state, i.e. first generation round
  *
  * @param {string} _args - ?.
  */
@@ -805,7 +849,7 @@ export function initGeneratedGameTokens(_args: string): void {
 }
 
 /**
- * Stop creating collectibles.
+ * Sets max players count.
  *
  * @param {string} _args - ?.
  */
@@ -827,7 +871,7 @@ export function setMaxPlayers(_args: string): void {
 }
 
 /**
- * Player collects a token.
+ * An async function that autonomously generates tokens
  *
  * @param {string} _args - Self-calling function for generating collectibles.
  */
@@ -931,11 +975,11 @@ function _generateRandomCollectible(screenWidth: f64, screenHeight: f64): Collec
 
 
 /**
- * Player collects a token.
+ * Runs an async process checking if a player has collected a token
  *
  * @param {string} data - Self-calling function for generating collectibles.
  */
-function _checkTokenCollectedAsync(data: string): void {
+function _checkTokensCollectedAsync(data: string): void {
   const curThread = currentThread();
   const curPeriod = currentPeriod();
 
@@ -951,7 +995,7 @@ function _checkTokenCollectedAsync(data: string): void {
 
   sendMessage(
       curAddr,
-      '_checkTokenCollected',
+      '_checkTokensCollected',
       nextPeriod, // validityStartPeriod
       nextThread, // validityStartThread
       nextPeriod + 5, // validityEndPeriod
@@ -963,3 +1007,36 @@ function _checkTokenCollectedAsync(data: string): void {
   );
 }
 
+
+/**
+ * Runs an async process to interpolate a given laser movement
+ *
+ * @param {string} laserUuid - the laser uuid to interpolate.
+ */
+function _interpolateLaserMovementAsync(laserUuid: string): void {
+  const curThread = currentThread();
+  const curPeriod = currentPeriod();
+
+  let nextThread = curThread + 1;
+  let nextPeriod = curPeriod;
+  if (nextThread >= THREADS) {
+    ++nextPeriod;
+    nextThread = 0;
+  }
+  // sc address
+  const curAddr = Context.callee();
+  assert(Context.callee().isValid(), 'Callee in _interpolateLaserMovementAsync must be valid');
+
+  sendMessage(
+      curAddr,
+      '_interpolateLaserMovement',
+      nextPeriod, // validityStartPeriod
+      nextThread, // validityStartThread
+      nextPeriod + 5, // validityEndPeriod
+      nextThread, // validityEndThread
+      70000000,
+      0,
+      0,
+      laserUuid
+  );
+}

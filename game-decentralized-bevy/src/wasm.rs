@@ -81,9 +81,9 @@ thread_local!(pub static LOCAL_PLAYER_LASERS: RefCell<Option<String>> = RefCell:
 // a method callable from js to get player x lasers state (serialized)
 #[wasm_bindgen]
 pub fn get_player_lasers() -> Option<String> {
-    LOCAL_PLAYER_LASERS.with(|pos| {
-        let x = &*pos.borrow();
-        x.clone()
+    LOCAL_PLAYER_LASERS.with(|json_laser_data| {
+        let json_laser_data = &*json_laser_data.borrow();
+        json_laser_data.clone()
     })
 }
 
