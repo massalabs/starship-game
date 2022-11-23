@@ -446,7 +446,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
     return opIds ? opIds[0] : undefined;
   }
 
-  export const setPlayerLasersOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
+  export const setPlayerLaserOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
      // evaluate thread from which to send
     let nodeStatusInfo: INodeStatus|null|undefined = null;
     try {
@@ -475,7 +475,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target smart contract address
         targetAddress: gameAddress,
         /// Target function name. No function is called if empty.
-        functionName: "setLaserPos",
+        functionName: "setPlayerLaserPos",
         /// Parameter to pass to the target function
         parameter: stringifyAndFormatNumbers(playerLasersUpdate)
       } as ICallData, executor as IAccount);
