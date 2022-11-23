@@ -7,11 +7,11 @@ export class SetPlayerLaserRequest {
   playerAddress: string = '';
   playerUuid: string = '';
   uuid: string = '';
-  x: number = 0;
-  y: number = 0;
-  rot: number = 0;
-  w: number = 0;
-  time: number = 0;
+  x: f32 = 0;
+  y: f32 = 0;
+  rot: f32 = 0;
+  w: f32 = 0;
+  time: f32 = 0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<SetPlayerLaserRequest>(this);

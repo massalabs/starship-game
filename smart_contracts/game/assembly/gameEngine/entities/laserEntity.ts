@@ -4,7 +4,6 @@ import {JSON} from 'json-as/assembly';
 
 @json
 export class LaserEntity {
-  playerUuid: string = '';
   uuid: string = '';
   x: f32 = 0.0;
   y: f32 = 0.0;

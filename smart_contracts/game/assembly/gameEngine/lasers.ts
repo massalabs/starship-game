@@ -12,6 +12,7 @@ import {SetPlayerLaserRequest} from './requests/SetPlayerLaserRequest';
 import {laserStates, spawnedLaserInterpolators, playerLaserUuids, playerTokensUuids} from './storage';
 import {_isPlayerRegistered} from './asserts';
 import {LaserToInterpolate} from './events/laserToInterpolate';
+import {LaserEntity} from './entities/laserEntity';
 
 /**
  * Runs an async process to interpolate a given laser movement
@@ -63,9 +64,10 @@ export function _interpolateLaserMovement(_args: string): void {
   const laserUuid = deserializedLaserToInterpolateEvent.laserUuid;
   const timeStep = env.env.time() as f64 - deserializedLaserToInterpolateEvent.time;
 
-  const playerLaserState = laserStates.get(laserUuid);
-  if (playerLaserState) {
-    // env.env.time()
+  const playerLaserStateSerialized = laserStates.get(laserUuid);
+  if (playerLaserStateSerialized) {
+    const laserState = LaserEntity.parseFromString(playerLaserStateSerialized);
+    // TODO: interpolate and check out of bounds
   }
 }
 
@@ -106,7 +108,14 @@ export function setPlayerLaserPos(_args: string): void {
 
   // add the laser uuid to the laser states map if needed
   if (!laserStates.contains(playerLaserUpdate.uuid)) {
-    laserStates.set(playerLaserUpdate.uuid, playerLaserUpdate.serializeToString());
+    const laserState: LaserEntity = {
+      uuid: playerLaserUpdate.uuid,
+      x: playerLaserUpdate.x,
+      y: playerLaserUpdate.y,
+      rot: playerLaserUpdate.rot,
+      w: playerLaserUpdate.w,
+    } as LaserEntity;
+    laserStates.set(playerLaserUpdate.uuid, laserState.serializeToString());
   }
 
   // check for spawned async interpolator, if not, spawn one and mark it
