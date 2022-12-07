@@ -23,17 +23,17 @@ import { WalletClient,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const providers: Array<IProvider> = [
             {
-                url: "http://51.75.131.129:33035",
+                url: "https://inno.massa.net/test13",
                 type: ProviderType.PUBLIC
             } as IProvider,
             {
-                url: "http://51.75.131.129:33034",
+                url: "https://inno.massa.net/test13",
                 type: ProviderType.PRIVATE
             } as IProvider
         ];
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12ZufE7mGz6RLt3PCN9dsbLE2bK2kvj8mnDE9ibdCycWPcg3C4z";
+        const scAddress = "A12Wnvw57n7ugs9NTSrEDK755ueahWEB4KsNipvswLkbv1ZeJxuN";
 
         console.log(`Filtering for sc events....`);
         const eventsFilter = {
@@ -43,7 +43,7 @@ import { WalletClient,
             original_caller_address: null, //"A127bjLK4kLMq3xE3BqxahRfCHGwQuzaWk52dXKFAjK4ZDTGEWbi",
             emitter_address: scAddress,
             eventsNameRegex: null, //"PLAYER_ADDED",
-            is_final: true
+            is_final: false
         } as IEventRegexFilter;
                 
         const eventPoller = EventPoller.startEventsPolling(
@@ -52,12 +52,15 @@ import { WalletClient,
             web3Client
         );
         eventPoller.on(ON_MASSA_EVENT_DATA, (events: Array<IEvent>) => {
+            console.log("Events ", events);
             //events.forEach((e) => console.log("DATA", e.data.substring(0, 600))); 
             
+            
              events.filter((e) => {
-                return e.data.includes("PLAYER_ADDED=");
+                return e.data.includes("INTERPOLATING LASER MOVEMENT CYCLE");
             })
             .forEach((e) => console.log("DATA", e.data));
+            
                           
         });
         eventPoller.on(ON_MASSA_EVENT_ERROR, (ex) => console.log("ERROR ", ex));

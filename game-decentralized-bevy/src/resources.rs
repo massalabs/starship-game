@@ -48,8 +48,8 @@ pub struct RemoteLaserState {
     pub uuid: String,
     pub x: f64,
     pub y: f64,
-    pub rot: f64,
-    pub w: f64,
+    pub xx: f64,
+    pub yy: f64,
 }
 
 #[derive(Clone, Debug, Serialize)]

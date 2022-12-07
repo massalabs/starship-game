@@ -460,6 +460,8 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
     //console.log("Next thread to execute op with = ", threadForNextOp);
     const executor = threadAddressesMap.get(threadForNextOp.toString());
     let opIds;
+    const payload = stringifyAndFormatNumbers(playerLasersUpdate);
+    console.log("Payload ", payload)
     try {
       opIds = await web3Client?.smartContracts().callSmartContract({
         /// storage fee for taking place in books
@@ -477,12 +479,12 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target function name. No function is called if empty.
         functionName: "setPlayerLaserPos",
         /// Parameter to pass to the target function
-        parameter: stringifyAndFormatNumbers(playerLasersUpdate)
+        parameter: payload
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);
       throw ex;
     }
-    //console.log("Updated Blockchain Coords OP_ID", opIds);
+    console.log("Set Player Laser OP_ID", opIds);
     return opIds ? opIds[0] : undefined;
   }

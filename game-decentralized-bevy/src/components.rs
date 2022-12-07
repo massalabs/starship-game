@@ -61,5 +61,5 @@ pub struct LaserData {
     pub uuid: Uuid,
     pub player_uuid: String,
     pub start_pos: Vec3,
-    pub start_rot: Quat,
+    pub unit_direction_vector: Vec3,
 }

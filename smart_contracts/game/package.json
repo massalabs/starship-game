@@ -21,25 +21,25 @@
   },
   "devDependencies": {
     "@as-pect/cli": "^7.0.7",
-    "assemblyscript": "^0.21.2",
     "@assemblyscript/loader": "^0.21.2",
-    "assemblyscript-json": "^1.1.0",
+    "@massalabs/as": "1.0.2",
+    "@massalabs/massa-as-sdk": "https://github.com/massalabs/massa-as-sdk.git#feature/token-mint",
     "@typescript-eslint/eslint-plugin": "^5.18.0",
     "@typescript-eslint/parser": "^5.18.0",
     "as-console": "^6.0.2",
+    "assemblyscript": "^0.21.2",
     "eslint": "^8.12.0",
     "eslint-config-google": "^0.14.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.0.0",
-    "@massalabs/as": "1.0.2",
-    "@massalabs/massa-as-sdk": "https://github.com/massalabs/massa-as-sdk.git#feature/token-mint",
     "prettier": "^2.6.2",
     "typedoc": "^0.23.14",
     "typedoc-plugin-markdown": "^3.13.6",
     "typescript": "^4.8.3"
   },
   "dependencies": {
-    "json-as": "^0.5.4",
+    "as-bignum": "^0.2.23",
+    "json-as": "0.5.5",
     "visitor-as": "^0.10.2"
   },
   "exports": {

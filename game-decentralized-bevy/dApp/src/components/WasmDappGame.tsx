@@ -41,7 +41,7 @@ export const LASERS_SHOT = "LASERS_SHOT";
 
 // settings consts
 export const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 200; // ms = 0.5 secs. Every half a sec update the player pos on chain
-export const UPDATE_BLOCKCHAIN_LASERS_TIMEOUT_DELAY = 200; // ms = 0.5 secs. Every half a sec update the player lasers on chain
+export const UPDATE_BLOCKCHAIN_LASERS_TIMEOUT_DELAY = 500; // ms = 0.5 secs. Every half a sec update the player lasers on chain
 export const GAME_EVENTS_POLLING_INTERVAL = 300; // 500 ms = 0.5 sec.
 export const REMOTE_PLAYERS_POLLING_INTERVAL = 300;
 export const SCREEN_WIDTH = 1000; //px
@@ -70,7 +70,6 @@ export interface IState {
   activePlayers: number;
   maxPlayers: number;
   playerEntity: IPlayerOnchainEntity|undefined;
-  shotLasersUuids: Set<string>
 }
 
 class WasmDappExample extends React.Component<IProps, IState> {
@@ -80,11 +79,15 @@ class WasmDappExample extends React.Component<IProps, IState> {
 
   // local player lasers
   private updateSelfBlockchainLasersTimeout: NodeJS.Timeout | null = null;
+  private ownLasersTracker: Set<string> = new Set<string>(); // [laserUuid]
 
   // remote players positions
   private remoteBlockchainPlayerPositionTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
   // remote player lasers
   private remoteBlockchainPlayerLasersTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
+
+
+  // game event poller
   private gameEventsPoller: EventPoller | null = null;
 
   constructor(props: IProps) {
@@ -113,7 +116,6 @@ class WasmDappExample extends React.Component<IProps, IState> {
       playerEntity: propState.playerEntity as IPlayerOnchainEntity,
       activePlayers: 0,
       maxPlayers: 0,
-      shotLasersUuids: new Set<string>()
     };
 
     // bind all component methods
@@ -323,7 +325,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
         try {
           gameEvent = JSON.parse(event.data) as IGameEvent;
         } catch (err) {
-          console.warn("Ignoring game event...", event);
+          //console.warn("Ignoring game event...", event);
           continue; // not a proper game event
         }
         if (gameEvent && gameEvent.data) {
@@ -439,6 +441,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
 
               // push event to game engine
               const gameEntity = new GameEntityUpdate(TOKEN_COLLECTED, JSON.stringify({...collectedTokenEventData}));
+              console.log("TOKEN COLLECTED", collectedTokenEventData)
               game.push_game_entity_updates([gameEntity]);
 
               // check if this update is concerning us or not
@@ -552,20 +555,25 @@ class WasmDappExample extends React.Component<IProps, IState> {
         } catch (ex) {
           console.error(`IPlayerLaserData Parse error ${ex}`);
         }
+        console.log(`NEW LASER !!! `, parsedLaserJSON);
 
         // check for a new laser
-        if (parsedLaserJSON && parsedLaserJSON.uuid && !this.state.shotLasersUuids.has(parsedLaserJSON?.uuid)) {
-          this.state.shotLasersUuids.add(parsedLaserJSON?.uuid);
-          console.log(`NEW LASER = `, parsedLaserJSON);
-          /*
-          await setPlayerLaserOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap,
-            {
-              ...parsedJSON,
-              playerAddress: this.state.playerAddress,
-              time: (new Date()).getTime()
-            } as IPlayerLasersRequest
-          );
-          */
+        if (parsedLaserJSON && parsedLaserJSON.uuid && !this.ownLasersTracker.has(parsedLaserJSON?.uuid)) {
+            this.ownLasersTracker.add(parsedLaserJSON?.uuid);
+            setTimeout(async () => {
+              await setPlayerLaserOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap,
+                {
+                  playerAddress: this.state.playerAddress,
+                  playerUuid: parsedLaserJSON?.playerUuid,
+                  uuid: parsedLaserJSON?.uuid,
+                  x: parsedLaserJSON?.x,
+                  y: parsedLaserJSON?.y,
+                  xx: parsedLaserJSON?.xx,
+                  yy: parsedLaserJSON?.yy,
+                  time: (new Date()).getTime()
+                } as IPlayerLasersRequest
+              );
+            }, 1);
         }
       }
     } catch (ex) {
@@ -816,7 +824,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-game-rot"
                         label="Game Rot Pos"
-                        value={this.state.playerGameState ? this.state.playerGameState.rot.toString() : "N/A"}
+                        value={this.state.playerGameState ? this.state.playerGameState.w.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
@@ -839,7 +847,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-massa-rot"
                         label="Massa Rot Pos"
-                        value={this.state.playerOnchainState ? this.state.playerOnchainState.rot.toString() : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.w.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />

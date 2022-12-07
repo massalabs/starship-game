@@ -11,7 +11,7 @@ pub struct PlayerMoved {
 
 /// Event being sent out when the player fires a laser
 #[derive(Debug)]
-pub struct LaserShot(pub RemoteLaserState);
+pub struct LaserShotEventData(pub RemoteLaserState);
 
 // player game events
 pub const PLAYER_MOVED: &'static str = "PLAYER_MOVED";

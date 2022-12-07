@@ -47,3 +47,4 @@ export const TOTAL_ONSCREEN_TOKENS: u16 = 10;
 export const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
 export const PLAYER_BOUNDING_BOX: f32 = 64.0;
 export const COLLECTIBLE_VALUE: Amount = new Amount(1);
+export const LASER_VELOCITY: f64 = 45; // fps

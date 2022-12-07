@@ -11,8 +11,8 @@ export interface IPlayerLasersRequest extends IPlayerLaserData {
 export interface IPlayerLaserData {
   playerUuid: string;
   uuid: string;
-  x: number;
-  y: number;
-  rot: number;
-  w: number;
+  x: number,
+  y: number,
+  xx: number,
+  yy: number,
 }

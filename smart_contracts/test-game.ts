@@ -41,7 +41,7 @@ import { IDatastoreEntryInput,
         //const web3Client = await ClientFactory.createDefaultClient(DefaultProviderUrls.LABNET, true, baseAccount);
         const web3Client = await ClientFactory.createCustomClient(providers, true, baseAccount);
 
-        const scAddress = "A12vJpT2DQwAsj44xArptZgVPpU3vmrE5QAVAptcqJmuwyexMEfc";
+        const scAddress = "A12FRrCh5bZm4qr2nuXT1pNDdAqetQrt7YHPsAELTJJtwJQNU9uD";
         const playerAddress = "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT";
         // ========================================================================= 
 
@@ -341,12 +341,11 @@ import { IDatastoreEntryInput,
         // ========================================================================= 
 
         // get sc storage data
-        /*
+        
         console.log(`Reading a smart state entry...`);
-        const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: `registered_players_states_key::${playerAddress}` } as IDatastoreEntryInput]);
+        const scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: scAddress, key: `laser_states_key::${"66df85ef-f6e2-4a57-bf43-18f048817c2a"}` } as IDatastoreEntryInput]);
         console.log(`Got smart contract storage data for key: ${(JSON.stringify(scStorageData, null, 4))}`);
-        */
-
+        
 
         // =================MINT TOKENS==========================================
 
@@ -386,19 +385,58 @@ import { IDatastoreEntryInput,
         // ===========================GET PLAYER LASERS========================== 
 
         // get player lasers
-        
+        /*
         console.log(`Reading a smart contract state...`);
         const readTxId = await web3Client.smartContracts().readSmartContract({
             fee: 0,
             maxGas: 200000,
             simulatedGasPrice: 0,
             targetAddress: scAddress,
-            targetFunction: "getPlayerLasers",
+            targetFunction: "getPlayerLasersUuids",
             parameter: playerAddress,
             callerAddress: playerAddress
         } as IReadData);
         console.log(`Called read contract with operation ID ${(JSON.stringify(readTxId, null, 4))}`);
         console.log("DATA ", readTxId[0].output_events[0].data);
+        */
+
+        // =================SET PLAYER LASER==========================================
+        /*
+        const payload = {
+            playerAddress: "A12CoH9XQzHFLdL8wrXd3nra7iidiYEQpqRdbLtyNXBdLtKh1jvT",
+            playerUuid: "uuid-7441783801510556672",
+            uuid: "20261e22-eda2-45ac-abd9-a38a0df4efff",
+            x: 270.56,
+            y: 220,
+            xx: 0.2,
+            yy: 0.6,
+            time: (new Date()).getTime()
+        };
+        
+        const callTxId = await web3Client.smartContracts().callSmartContract({
+            fee: 0,
+            gasPrice: 0,
+            maxGas: 700000,
+            parallelCoins: 0,
+            sequentialCoins: 0,
+            targetAddress: scAddress,
+            functionName: "setPlayerLaserPos",
+            parameter: JSON.stringify(payload)
+        } as ICallData);
+        const callScOperationId = callTxId[0];
+        console.log(`Called smart contract with operation ID ${(callScOperationId)}`);
+
+        // poll events
+        const events = await EventPoller.getEventsOnce({
+            start: null,
+            end: null,
+            original_operation_id: callScOperationId,
+            original_caller_address: null,
+            emitter_address: null,
+        } as IEventFilter, web3Client);
+        console.log("LASER ADD EVENTS ", events);
+        */
+        
         
 
     } catch (ex) {

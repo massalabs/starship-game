@@ -122,6 +122,14 @@ pub fn spawn_laser_closure(
     laser_texture: Handle<Image>,
     state: PlayerLaserSerializedData,
 ) -> Entity {
+
+    let turret_transform = Transform {
+        rotation: Quat::from_array([0., 0., state.rot as f32, state.w as f32]),
+        translation: Vec3::Z,
+        ..Default::default()
+    };
+    let laser_unit_direction = turret_transform.rotation * Vec3::Y;
+
     commands
         .spawn_bundle(SpriteBundle {
             texture: laser_texture,
@@ -137,7 +145,7 @@ pub fn spawn_laser_closure(
             uuid: Uuid::from_str(&state.uuid).expect("A proper uuid"),
             player_uuid: state.player_uuid.clone(),
             start_pos: Vec3::new(state.x as f32, state.y as f32, 1.0),
-            start_rot: Quat::from_array([0., 0., state.rot as f32, state.w as f32]),
+            unit_direction_vector: laser_unit_direction
         }))
         .insert(SpriteSize::from(PLAYER_LASER_SIZE))
         .insert(Movable { auto_despawn: true })
