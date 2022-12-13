@@ -1,6 +1,6 @@
 import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./entities/PlayerEntity";
-import { IPlayerLasersRequest } from "./entities/PlayerLasers";
+import { IPlayerLaserData, IPlayerLasersRequest } from "./entities/PlayerLasers";
 import { ITokenOnchainEntity } from "./entities/TokenEntity";
 
 export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string, awaitFinalization: boolean): Promise<IPlayerOnchainEntity|undefined> => {
@@ -129,7 +129,7 @@ export const getPlayerCandidatePositionFromStore = async (web3Client: Client, ga
   return playerEntity as IPlayerOnchainEntity;
 }
 
-export const getPlayerCandidateLasersPositionFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerLasersRequest|null> => {
+export const getPlayerLasersFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
   let scStorageData: IContractStorageData[] = [];
   try {
     scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `registered_players_lasers_key::${playerAddress}` } as IDatastoreEntryInput]);
@@ -139,19 +139,33 @@ export const getPlayerCandidateLasersPositionFromStore = async (web3Client: Clie
   }
 
   if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
+    return [];
+  }
+  const candidatePos = scStorageData[0].candidate;
+  return candidatePos.split(",");
+}
+
+export const getLaserStateFromStore = async (web3Client: Client, gameAddress: string, laserUuid: string): Promise<IPlayerLaserData|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `laser_states_key::${laserUuid}` } as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+  if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
     return null;
   }
   const candidatePos = scStorageData[0].candidate;
-  let playerLasersRequest: IPlayerLasersRequest|undefined = undefined;
+  let playerLaser: IPlayerLaserData|undefined = undefined;
   try {
-    playerLasersRequest = JSON.parse(candidatePos as string);
+    playerLaser = JSON.parse(candidatePos as string);
   } catch (ex) {
-      console.error("Error parsing data for player lasers request", candidatePos);
+      console.error("Error parsing data for player laser", candidatePos);
       throw ex;
   }
-  return playerLasersRequest as IPlayerLasersRequest;
+  return playerLaser as IPlayerLaserData;
 }
-
 
 export const isPlayerRegistered = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<boolean> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({

@@ -9,12 +9,15 @@ import {
   Storage,
   generateEvent,
 } from '@massalabs/massa-as-sdk/assembly';
-import {LASER_VELOCITY, SCREEN_HEIGHT_KEY, SCREEN_WIDTH_KEY, THREADS} from './config';
+import {LASER_OUT_OF_BOUNDS, LASER_VELOCITY, NEW_LASER, SCREEN_HEIGHT_KEY, SCREEN_WIDTH_KEY, THREADS} from './config';
 import {SetPlayerLaserRequest} from './requests/SetPlayerLaserRequest';
 import {laserStates, spawnedLaserInterpolators, playerLaserUuids} from './storage';
 import {_isPlayerRegistered} from './asserts';
 import {LaserToInterpolate} from './events/laserToInterpolate';
 import {LaserEntity} from './entities/laserEntity';
+import {_formatGameEvent, _generateAsyncEvent, _sendGameEvent} from './events/eventEmitter';
+import {NewLaserShotEvent} from './events/newLaserShot';
+import {LaserDestroyedEvent} from './events/laserDestroyedEvent';
 
 /**
  * Runs an async process to interpolate a given laser movement
@@ -101,6 +104,30 @@ export function _interpolateLaserMovement(_args: string): void {
       generateEvent(`LASER OUT OF BOUNDS :: DELETED ${laserState.uuid}`);
       laserStates.delete(laserState.uuid);
       spawnedLaserInterpolators.delete(laserState.uuid);
+      // remove the laser from the user
+      const playerConcatenatedLaserUuids = playerLaserUuids.get(deserializedLaserToInterpolateEvent.shooterAddress);
+      if (playerConcatenatedLaserUuids) {
+        const uuidsArray = playerConcatenatedLaserUuids.split(',');
+        let indexToRemove = -1;
+        for (let i = 0; i < uuidsArray.length; i++) {
+          if (uuidsArray[i] === laserState.uuid) {
+            indexToRemove = i;
+          }
+        }
+        if (indexToRemove > -1) {
+          uuidsArray.splice(indexToRemove, 1);
+          playerLaserUuids.set(deserializedLaserToInterpolateEvent.shooterAddress, uuidsArray.join(','));
+        }
+      }
+
+      // emit an event
+      const laserDestroyedEventData: LaserDestroyedEvent = {
+        laserUuid: laserState.uuid,
+        shooterUuid: deserializedLaserToInterpolateEvent.shooterUuid,
+        shooterAddress: deserializedLaserToInterpolateEvent.shooterAddress,
+        time: env.env.time() as f64,
+      } as LaserDestroyedEvent;
+      _sendGameEvent(_formatGameEvent(LASER_OUT_OF_BOUNDS, laserDestroyedEventData.serializeToString()));
       return;
     }
 
@@ -135,7 +162,6 @@ export function _interpolateLaserMovement(_args: string): void {
  * @param {string} _args - stringified PlayArgs.
  */
 export function setPlayerLaserPos(_args: string): void {
-  generateEvent(`ARGSS ${_args}`);
   // read player laser update
   const playerLaserUpdate = SetPlayerLaserRequest.parseFromString(_args);
   // check that player is already registered
@@ -150,7 +176,6 @@ export function setPlayerLaserPos(_args: string): void {
 
   // update the player uuids
   let playerActiveLasersSerialized = playerLaserUuids.get(playerLaserUpdate.playerAddress);
-  generateEvent(`PLAYER LASER SERIALIZED BEFORE ${playerActiveLasersSerialized ? playerActiveLasersSerialized : 'N/A'}`);
 
   if (playerActiveLasersSerialized) {
     const currentActiveLaserUuids = playerActiveLasersSerialized.split(',');
@@ -167,7 +192,6 @@ export function setPlayerLaserPos(_args: string): void {
     playerActiveLasersSerialized = `${playerLaserUpdate.uuid}`;
   }
   playerLaserUuids.set(playerLaserUpdate.playerAddress, playerActiveLasersSerialized);
-  generateEvent(`PLAYER LASER SERIALIZED AFTER ${playerActiveLasersSerialized}`);
 
   // add the laser uuid to the laser states map if needed
   if (!laserStates.contains(playerLaserUpdate.uuid)) {
@@ -178,21 +202,34 @@ export function setPlayerLaserPos(_args: string): void {
       xx: playerLaserUpdate.xx,
       yy: playerLaserUpdate.yy,
     } as LaserEntity;
-    generateEvent(`SETTING LASER STATE ${laserState.serializeToString()}`);
     laserStates.set(playerLaserUpdate.uuid, laserState.serializeToString());
-    generateEvent(`NEW LASER UPDATE ${laserStates.get(playerLaserUpdate.uuid) ? laserStates.get(playerLaserUpdate.uuid) as string : `N/A`}`);
   }
 
   // check for spawned async interpolator, if not, spawn one and mark it
   if (!spawnedLaserInterpolators.contains(playerLaserUpdate.uuid)) {
     spawnedLaserInterpolators.set(playerLaserUpdate.uuid, 'true');
-    generateEvent(`SETTING SPAWNED LASER ${playerLaserUpdate.uuid}`);
+
+    // emit an event
+    const laserShotEventData: NewLaserShotEvent = {
+      laserUuid: playerLaserUpdate.uuid,
+      shooterUuid: playerLaserUpdate.playerUuid,
+      shooterAddress: playerLaserUpdate.playerAddress,
+      time: env.env.time() as f64,
+    } as NewLaserShotEvent;
+
+    // generate a message
+    const eventMessage = _formatGameEvent(NEW_LASER, laserShotEventData.serializeToString());
+
+    // send async event from sc to all players
+    _generateAsyncEvent(eventMessage);
 
     // run an async function to:
     // 1. interpolate the given laser movement
     // 2. check for out-of-bound lasers and update state
     const eventData: LaserToInterpolate = {
       laserUuid: playerLaserUpdate.uuid,
+      shooterUuid: playerLaserUpdate.playerUuid,
+      shooterAddress: playerLaserUpdate.playerAddress,
       time: env.env.time() as f64,
     } as LaserToInterpolate;
     _interpolateLaserMovementAsync(eventData.serializeToString());

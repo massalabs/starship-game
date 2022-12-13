@@ -41,10 +41,14 @@ export const TOKEN_COLLECTED = 'TOKEN_COLLECTED';
 export const SCREEN_WIDTH_ADJUSTED = 'SCREEN_WIDTH_ADJUSTED';
 export const SCREEN_HEIGHT_ADJUSTED = 'SCREEN_HEIGHT_ADJUSTED';
 
+// lasers
+export const NEW_LASER = 'NEW_LASER';
+export const LASER_OUT_OF_BOUNDS = 'LASER_OUT_OF_BOUNDS';
+
 // ------------------------- global settings -------------------------
 export const THREADS: u8 = 32;
 export const TOTAL_ONSCREEN_TOKENS: u16 = 10;
 export const COLLECTIBLE_BOUNDING_BOX: f32 = 50.0;
 export const PLAYER_BOUNDING_BOX: f32 = 64.0;
 export const COLLECTIBLE_VALUE: Amount = new Amount(1);
-export const LASER_VELOCITY: f64 = 45; // fps
+export const LASER_VELOCITY: f64 = 8; // fps

@@ -5,6 +5,8 @@ import {JSON} from 'json-as/assembly';
 @json
 export class LaserToInterpolate {
   laserUuid: string = '';
+  shooterUuid: string = '';
+  shooterAddress: string = '';
   time: f64 = 0.0;
 
   serializeToString(): string {

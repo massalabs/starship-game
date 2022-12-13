@@ -1,7 +1,7 @@
 use crate::components::{
     Collectible, ExplosionToSpawn, LaserData, Movable, RemoteLaser, SpriteSize, Velocity,
 };
-use crate::events::PlayerLaserSerializedData;
+use crate::events::{PlayerLaserEventData, PlayerLaserSerializedData};
 use crate::resources::{RemoteCollectibleState, RemoteGamePlayerState};
 use crate::{COLLECTIBLE_SIZE, LASER_LINEAR_MOVEMENT_SPEED, PLAYER_LASER_SIZE, SPRITE_SCALE};
 use anyhow::{Context, Result};
@@ -120,22 +120,15 @@ where
 pub fn spawn_laser_closure(
     commands: &mut Commands,
     laser_texture: Handle<Image>,
-    state: PlayerLaserSerializedData,
+    state: PlayerLaserEventData,
 ) -> Entity {
-
-    let turret_transform = Transform {
-        rotation: Quat::from_array([0., 0., state.rot as f32, state.w as f32]),
-        translation: Vec3::Z,
-        ..Default::default()
-    };
-    let laser_unit_direction = turret_transform.rotation * Vec3::Y;
-
+    let laser_unit_direction = Vec3::from_array([state.xx as f32, state.yy as f32, 0.0]);
     commands
         .spawn_bundle(SpriteBundle {
             texture: laser_texture,
             transform: Transform {
-                translation: Vec3::new(state.x as f32, state.y as f32, 1.0), // set z axis to 1 so tokens stay above
-                rotation: Quat::from_array([0., 0., state.rot as f32, state.w as f32]),
+                translation: Vec3::new(state.x as f32, state.y as f32, 0.0),
+                rotation: Quat::from_scaled_axis(laser_unit_direction),
                 scale: Vec3::new(SPRITE_SCALE, SPRITE_SCALE, 1.),
                 ..Default::default()
             },
@@ -144,8 +137,8 @@ pub fn spawn_laser_closure(
         .insert(RemoteLaser(LaserData {
             uuid: Uuid::from_str(&state.uuid).expect("A proper uuid"),
             player_uuid: state.player_uuid.clone(),
-            start_pos: Vec3::new(state.x as f32, state.y as f32, 1.0),
-            unit_direction_vector: laser_unit_direction
+            start_pos: Vec3::new(state.x as f32, state.y as f32, 0.0),
+            unit_direction_vector: laser_unit_direction,
         }))
         .insert(SpriteSize::from(PLAYER_LASER_SIZE))
         .insert(Movable { auto_despawn: true })

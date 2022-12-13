@@ -65,7 +65,7 @@ opt-level = 'z'
 # optimization for size
 # opt-level = 's'
 # link time optimization using using whole-program analysis
-lto = true
+lto = "thin"
 
 [profile.wasm-release]
 # Use release profile as default values
@@ -77,7 +77,7 @@ opt-level = "z"
 
 # Do a second optimization pass removing duplicate or unused code from dependencies.
 # Slows compile times, marginal improvements
-lto = "fat"
+lto = "thin"
 
 # When building crates, optimize larger chunks at a time
 # Slows compile times, marginal improvements

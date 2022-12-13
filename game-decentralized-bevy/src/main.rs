@@ -18,7 +18,7 @@ use components::{
     LocalPlayer, Movable, RemoteLaser, RemotePlayer, SpriteSize, Velocity,
 };
 use errors::ClientError;
-use events::{LaserShotEventData, PlayerLaserEventData, PlayerLaserSerializedData, PlayerMoved};
+use events::{PlayerLaserEventData, PlayerLaserSerializedData, PlayerMoved};
 use js_sys::{Array, Function, Map, Object, Reflect, WebAssembly};
 use resources::{
     CollectedEntity, EntityType, GameTextures, RemoteCollectibleState, RemoteGameState,
@@ -52,8 +52,11 @@ const SCREEN_HEIGHT: f32 = 500.0;
 const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 
 // player speeds
-const PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
-const PLAYER_LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
+const LOCAL_PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
+const LOCAL_PLAYER_LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
+
+const REMOTE_PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 30.0; // linear speed in meters per second
+const REMOTE_PLAYER_LINEAR_ROTATION_SPEED: f32 = 320.0; // rotation speed in radians per second
 
 // laser speeds
 const LASER_LINEAR_MOVEMENT_SPEED: f32 = 45.0; // linear speed in meters per second
@@ -95,7 +98,7 @@ fn main() {
         ..default()
     });
     app.add_event::<PlayerMoved>();
-    app.add_event::<LaserShotEventData>();
+    app.add_event::<PlayerLaserEventData>();
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
@@ -218,8 +221,8 @@ fn entities_from_blockchain_update_system(
                                 .insert(LocalPlayer(player_added.uuid.clone()))
                                 .insert(SpriteSize::from(PLAYER_SIZE))
                                 .insert(Velocity {
-                                    linear: PLAYER_LINEAR_MOVEMENT_SPEED,
-                                    rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
+                                    linear: LOCAL_PLAYER_LINEAR_MOVEMENT_SPEED,
+                                    rotational: f32::to_radians(LOCAL_PLAYER_LINEAR_ROTATION_SPEED),
                                 })
                                 .id();
 
@@ -267,8 +270,10 @@ fn entities_from_blockchain_update_system(
                                     .insert(RemotePlayer(player_added.uuid.clone()))
                                     .insert(SpriteSize::from(PLAYER_SIZE))
                                     .insert(Velocity {
-                                        linear: PLAYER_LINEAR_MOVEMENT_SPEED,
-                                        rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
+                                        linear: REMOTE_PLAYER_LINEAR_MOVEMENT_SPEED,
+                                        rotational: f32::to_radians(
+                                            REMOTE_PLAYER_LINEAR_ROTATION_SPEED,
+                                        ),
                                     })
                                     .id();
 
@@ -353,8 +358,14 @@ fn entities_from_blockchain_update_system(
                         game_state.remove_collectible(&uuid);
                     }
                 }
-                Some(RemoteStateType::LasersShot((player_uuid, lasers_shot))) => {
-                    //info!("[BEVY] LASERS SHOT {:?}", &lasers_shot);
+                Some(RemoteStateType::LaserAdded(laser_shot)) => {
+                    info!("[BEVY] LASER ADDED EVENT {:?}", &laser_shot);
+                    // spawn the new laser
+                    let new_laser_entity_id = spawn_laser_closure(
+                        &mut commands,
+                        game_textures.laser.clone(),
+                        laser_shot.clone(),
+                    );
 
                     /*
                     // get current in-memory player lasers map
@@ -492,6 +503,9 @@ fn entities_from_blockchain_update_system(
 
                     */
                 }
+                Some(RemoteStateType::LaserUpdated(laser_shot)) => {
+                    info!("[BEVY] LASER UPDATED EVENT {:?}", &laser_shot);
+                }
                 None => {}
             }
         }
@@ -509,14 +523,14 @@ fn interpolate_blockchain_lasers_state_system(
             player_uuid,
             uuid,
             start_pos,
-            unit_direction_vector
+            unit_direction_vector,
         } = &remote_laser.0;
 
         if let Some(remote_laser_state) = game_state.remote_lasers.get_mut(player_uuid) {
             let remote_laser_pos = remote_laser_state.get(&uuid.to_string());
             if let Some(remote_laser_pos) = remote_laser_pos {
                 // TODO: how to interpolate - use the blockchain x, y state too or just the rotation ?
-                 transform.translation += *unit_direction_vector * velocity.linear * TIME_STEP;
+                transform.translation += *unit_direction_vector * velocity.linear * TIME_STEP;
 
                 // despawn when out of screen
                 let mut should_despawn = false;
@@ -790,15 +804,13 @@ fn local_player_laser_shoot_system(
     time: Res<Time>,
     game_textures: Res<GameTextures>,
     mut game_state: ResMut<RemoteGameState>,
-    mut events_writer: EventWriter<LaserShotEventData>,
+    mut events_writer: EventWriter<PlayerLaserEventData>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(&Velocity, &mut Transform, &LocalPlayer), With<LocalPlayer>>,
 ) {
     for (velocity, mut transform, local_player) in query.iter_mut() {
-
         // if space is pressed, shoot laser
         if keyboard_input.just_pressed(KeyCode::Space) {
-
             // calculate the laser unit rotation
             let turret_transform = Transform {
                 rotation: transform.rotation,
@@ -869,15 +881,22 @@ fn local_player_laser_shoot_system(
             }
 
             // send message about laser shot
-            events_writer.send(LaserShotEventData(new_spawned_laser));
+            events_writer.send(PlayerLaserEventData {
+                player_uuid: new_spawned_laser.player_uuid.clone(),
+                uuid: new_spawned_laser.uuid.clone(),
+                x: new_spawned_laser.x,
+                y: new_spawned_laser.y,
+                xx: new_spawned_laser.xx,
+                yy: new_spawned_laser.yy,
+            });
         }
     }
 }
 
-fn on_local_player_laser_shot_system(mut events: EventReader<LaserShotEventData>) {
+fn on_local_player_laser_shot_system(mut events: EventReader<PlayerLaserEventData>) {
     for laser_shot_event in events.iter() {
         LOCAL_PLAYER_LASERS.with(|pos| {
-            let laser_data = serde_json::to_string(&laser_shot_event.0).ok();
+            let laser_data = serde_json::to_string(&laser_shot_event).ok();
             *pos.borrow_mut() = laser_data;
         });
     }

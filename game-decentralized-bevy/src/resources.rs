@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_bindgen::JsValue;
 
-use crate::events::PlayerLaserSerializedData;
+use crate::events::PlayerLaserEventData;
 
 #[derive(Debug, Clone)]
 pub struct GameTextures {
@@ -76,7 +76,8 @@ pub enum RemoteStateType {
     TokenCollected(CollectedEntity),
     TokenAdded(RemoteCollectibleState),
     TokenRemoved(RemoteCollectibleState),
-    LasersShot((String, Vec<PlayerLaserSerializedData>)), // player_uuid - vec<PlayerLaserSerializedData>
+    LaserAdded(PlayerLaserEventData),
+    LaserUpdated(PlayerLaserEventData),
 }
 
 #[derive(Clone)]
