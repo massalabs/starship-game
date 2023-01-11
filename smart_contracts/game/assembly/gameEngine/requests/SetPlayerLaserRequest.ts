@@ -6,8 +6,12 @@ import {JSON} from 'json-as/assembly';
 export class SetPlayerLaserRequest {
   playerAddress: string = '';
   playerUuid: string = '';
-  lasersData: string = ''; // format: "{player_uuid: string, uuid: string, x: number, y: number, rot: number, w: number}@{player_uuid: string, uuid: string, x: number, y: number, rot: number, w: number}"
-  time: number = 0;
+  uuid: string = '';
+  x: f32 = 0.0;
+  y: f32 = 0.0;
+  xx: f32 = 0.0;
+  yy: f32 = 0.0;
+  time: f32 = 0.0;
 
   serializeToString(): string {
     const stringified = JSON.stringify<SetPlayerLaserRequest>(this);

@@ -38,6 +38,11 @@ args = ["--out-dir", "${OUT_DIR}", "--out-name", "${WASM_NAME}", "--target", "we
 command = "./bin/wasm-bindgen"
 dependencies = ["cargo-build-web", "wasm-bindgen-cli"]
 
+[tasks.build-web-optimized]
+args = ["-O", "-ol", "100", "-s", "100", "-o", "${OUT_DIR}/${WASM_NAME}_bg.wasm", "${OUT_DIR}/${WASM_NAME}_bg.wasm"]
+command = "/usr/bin/wasm-opt"
+dependencies = ["build-web"]
+
 [tasks.build-native]
 args = ["build", "@@split(CARGO_RELEASE_ARGS, )"]
 command = "cargo"

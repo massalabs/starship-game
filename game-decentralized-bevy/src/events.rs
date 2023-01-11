@@ -1,5 +1,7 @@
 use bevy::prelude::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
+
+use crate::resources::RemoteLaserState;
 /// Event being sent out when the own player moves
 #[derive(Debug)]
 pub struct PlayerMoved {
@@ -18,7 +20,8 @@ pub const TOKEN_REMOVED: &'static str = "TOKEN_REMOVED";
 pub const TOKEN_COLLECTED: &'static str = "TOKEN_COLLECTED";
 
 // game lasers events
-pub const LASERS_SHOT: &'static str = "LASERS_SHOT";
+pub const NEW_LASER: &'static str = "NEW_LASER";
+pub const LASER_UPDATE: &'static str = "LASER_UPDATE";
 
 // all of these events come from js via polling the blockchain
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -54,10 +57,12 @@ pub struct CollectedEntityEventData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerLaserEventData {
-    pub player_address: String,
     pub player_uuid: String,
-    pub lasers_data: String,
-    pub time: f64,
+    pub uuid: String,
+    pub x: f64,
+    pub y: f64,
+    pub xx: f64,
+    pub yy: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -67,6 +72,6 @@ pub struct PlayerLaserSerializedData {
     pub uuid: String,
     pub x: f64,
     pub y: f64,
-    pub rot: f64,
-    pub w: f64,
+    pub xx: f64,
+    pub yy: f64,
 }

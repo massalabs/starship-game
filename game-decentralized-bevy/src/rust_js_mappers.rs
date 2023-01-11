@@ -4,8 +4,8 @@ use wasm_bindgen::{JsCast, JsValue};
 use crate::errors::ClientError;
 use crate::events::{
     CollectedEntityEventData, PlayerLaserEventData, PlayerLaserSerializedData,
-    RemoteCollectibleEventData, RemotePlayerEventData, LASERS_SHOT, PLAYER_ADDED, PLAYER_MOVED,
-    PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
+    RemoteCollectibleEventData, RemotePlayerEventData, LASER_UPDATE, NEW_LASER, PLAYER_ADDED,
+    PLAYER_MOVED, PLAYER_REMOVED, TOKEN_ADDED, TOKEN_COLLECTED, TOKEN_REMOVED,
 };
 use crate::resources::{
     CollectedEntity, EntityType, RemoteCollectibleState, RemoteGamePlayerState, RemoteLaserState,
@@ -152,32 +152,17 @@ pub fn map_js_update_to_rust_entity_state(
             //info!("[BEVY] TOKEN COLLECTED {:?}", &collected_entity_event);
             return Ok(collected_entity_event.map(RemoteStateType::TokenCollected));
         }
-        LASERS_SHOT => {
+        NEW_LASER => {
             let lasers_shot_event = get_key_value_from_obj::<String>("data", &js_obj)
                 .map(|data| serde_json::from_str::<PlayerLaserEventData>(data.as_str()).ok())
                 .flatten();
-
-            let player_uuid = lasers_shot_event
-                .as_ref()
-                .and_then(|data| Some(data.player_uuid.clone()))
-                .expect("A valid player uuid");
-
-            let player_lasers = lasers_shot_event
-                .map(|f| {
-                    f.lasers_data
-                        .split("@")
-                        .filter_map(|item| {
-                            serde_json::from_str::<PlayerLaserSerializedData>(item).ok()
-                        })
-                        .collect::<Vec<PlayerLaserSerializedData>>()
-                })
-                .unwrap_or_default();
-
-            //info!("[BEVY] LASERS SHOT EVENT {:?}", &x);
-            return Ok(Some(RemoteStateType::LasersShot((
-                player_uuid,
-                player_lasers,
-            ))));
+            return Ok(lasers_shot_event.map(RemoteStateType::LaserAdded));
+        }
+        LASER_UPDATE => {
+            let lasers_shot_event = get_key_value_from_obj::<String>("data", &js_obj)
+                .map(|data| serde_json::from_str::<PlayerLaserEventData>(data.as_str()).ok())
+                .flatten();
+            return Ok(lasers_shot_event.map(RemoteStateType::LaserUpdated));
         }
         _ => return Ok(None),
     }

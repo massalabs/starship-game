@@ -10,7 +10,7 @@ import LoadingOverlay from 'react-loading-overlay-ts';
 import { ToastContainer, toast } from 'react-toastify';
 import { ClientFactory, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity, IPlayerGameEntity } from "../entities/PlayerEntity";
-import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidateLasersPositionFromStore, getPlayerCandidatePositionFromStore, getPlayerPos, getPlayerTokens, setPlayerLasersOnchain, setPlayerPositionOnchain } from "../gameMethods";
+import { disconnectPlayer, getActivePlayersAddresses, getActivePlayersCount, getCollectiblesState, getLaserStateFromStore, getMaximumPlayersCount, getPlayerBalance, getPlayerCandidatePositionFromStore, getPlayerLasersFromStore, getPlayerPos, getPlayerTokens, setPlayerLaserOnchain, setPlayerPositionOnchain } from "../gameMethods";
 import { IGameEvent } from "../entities/GameEvent";
 import { PollTimeout, wait } from "../utils/time";
 import { getProviderUrl } from "../utils/massa";
@@ -22,7 +22,9 @@ import withRouter from "../utils/withRouter";
 import Button from '@mui/material/Button';
 import { ICollectedTokenOnchainEntity } from "../entities/CollectedTokenEntity";
 import { parseJson } from "../utils/utils";
-import { IPlayerLasersRequest } from "../entities/PlayerLasers";
+import { IPlayerLaserData, IPlayerLasersRequest } from "../entities/PlayerLasers";
+import { NewLaserEvent } from "../entities/NewLaserEvent";
+import { LaserOutOfBoundsEvent } from "../entities/LaserOutOfBoundsEvent";
 
 export const PLAYER_POS_KEY = "PLAYER_POS_KEY";
 
@@ -37,12 +39,15 @@ export const TOKEN_REMOVED = "TOKEN_REMOVED";
 export const TOKEN_COLLECTED = "TOKEN_COLLECTED";
 
 // laser events
-export const LASERS_SHOT = "LASERS_SHOT";
+export const NEW_LASER = "NEW_LASER";
+export const LASER_UPDATE = "LASER_UPDATE";
+export const LASER_OUT_OF_BOUNDS = 'LASER_OUT_OF_BOUNDS';
 
 // settings consts
 export const UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY = 200; // ms = 0.5 secs. Every half a sec update the player pos on chain
-export const GAME_EVENTS_POLLING_INTERVAL = 300; // 500 ms = 0.5 sec.
-export const REMOTE_PLAYERS_POLLING_INTERVAL = 300;
+export const UPDATE_BLOCKCHAIN_LASERS_TIMEOUT_DELAY = 200; // ms = 0.5 secs. Every half a sec update the player lasers on chain
+export const GAME_EVENTS_POLLING_INTERVAL = 200; // 500 ms = 0.5 sec.
+export const REMOTE_PLAYERS_POLLING_INTERVAL = 200;
 export const SCREEN_WIDTH = 1000; //px
 export const SCREEN_HEIGHT = 500; //px
 
@@ -72,10 +77,23 @@ export interface IState {
 }
 
 class WasmDappExample extends React.Component<IProps, IState> {
+  // local player positions
   private updateSelfBlockchainPositionTimeout: NodeJS.Timeout | null = null;
-  private readSelfBlockchainPositionTimeout: NodeJS.Timeout | null = null;
+  private readSelfBlockchainPositionTimeout: NodeJS.Timeout | null = null;// NOTE: just for debug, no need to read this in prod
+
+  // local player lasers
+  private updateSelfBlockchainLasersTimeout: NodeJS.Timeout | null = null;
+  private ownLasersTracker: Set<string> = new Set<string>(); // [laserUuid]
+
+  // remote players positions
   private remoteBlockchainPlayerPositionTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
+
+  // remote player lasers
   private remoteBlockchainPlayerLasersTimeouts: Map<string, PollTimeout> = new Map<string, PollTimeout>();
+  private remoteLasersTracker: Map<string, Set<string>> = new Map<string, Set<string>>();
+
+
+  // game event poller
   private gameEventsPoller: EventPoller | null = null;
 
   constructor(props: IProps) {
@@ -109,9 +127,10 @@ class WasmDappExample extends React.Component<IProps, IState> {
     // bind all component methods
     this.listenOnGameEvents = this.listenOnGameEvents.bind(this);
     this.updateSelfBlockchainPosition = this.updateSelfBlockchainPosition.bind(this);
+    this.updateSelfBlockchainLasers = this.updateSelfBlockchainLasers.bind(this);
     this.readSelfBlockchainPosition = this.readSelfBlockchainPosition.bind(this);
     this.updatePlayerRemoteBlockchainPosition = this.updatePlayerRemoteBlockchainPosition.bind(this);
-    this.updatePlayerLasersRemoteBlockchainPosition = this.updatePlayerLasersRemoteBlockchainPosition.bind(this);
+    this.updateRemotePlayerLasersBlockchainPosition = this.updateRemotePlayerLasersBlockchainPosition.bind(this);
     this.disconnectPlayer = this.disconnectPlayer.bind(this);
     this.stopAllPollers = this.stopAllPollers.bind(this);
   }
@@ -243,7 +262,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
         }
 
         if (!this.remoteBlockchainPlayerLasersTimeouts.has(remotePlayerState.address)) {
-          this.remoteBlockchainPlayerLasersTimeouts.set(remotePlayerState.address, new PollTimeout(REMOTE_PLAYERS_POLLING_INTERVAL, remotePlayerState.address, this.updatePlayerLasersRemoteBlockchainPosition));
+          this.remoteBlockchainPlayerLasersTimeouts.set(remotePlayerState.address, new PollTimeout(REMOTE_PLAYERS_POLLING_INTERVAL, remotePlayerState.address, this.updateRemotePlayerLasersBlockchainPosition));
         }
       });
 
@@ -269,7 +288,8 @@ class WasmDappExample extends React.Component<IProps, IState> {
         // start interval loops
         this.listenOnGameEvents();
         this.updateSelfBlockchainPosition();
-        this.readSelfBlockchainPosition();
+        this.updateSelfBlockchainLasers();
+        this.readSelfBlockchainPosition(); // NOTE: just for debug version
         toast(`Ready GO!`,{
           className: "toast",
           type: "success"
@@ -311,7 +331,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
         try {
           gameEvent = JSON.parse(event.data) as IGameEvent;
         } catch (err) {
-          console.warn("Ignoring game event...", event);
+          //console.warn("Ignoring game event...", event);
           continue; // not a proper game event
         }
         if (gameEvent && gameEvent.data) {
@@ -379,7 +399,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
 
               // start polling player lasers
               if (!this.remoteBlockchainPlayerLasersTimeouts.has(playerAddedEventData.address)) {
-                this.remoteBlockchainPlayerLasersTimeouts.set(playerAddedEventData.address, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddedEventData.address, this.updatePlayerLasersRemoteBlockchainPosition));
+                this.remoteBlockchainPlayerLasersTimeouts.set(playerAddedEventData.address, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddedEventData.address, this.updateRemotePlayerLasersBlockchainPosition));
               }
 
               // increase the players count
@@ -427,6 +447,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
 
               // push event to game engine
               const gameEntity = new GameEntityUpdate(TOKEN_COLLECTED, JSON.stringify({...collectedTokenEventData}));
+              //console.log("TOKEN COLLECTED", collectedTokenEventData)
               game.push_game_entity_updates([gameEntity]);
 
               // check if this update is concerning us or not
@@ -474,6 +495,26 @@ class WasmDappExample extends React.Component<IProps, IState> {
               game.push_game_entity_updates([gameEntity]);
               break;
             }
+            case NEW_LASER: {
+              // try to parse event
+              const newLaserEvent = parseJson<NewLaserEvent>(eventData);
+              if (newLaserEvent.isError) {
+                console.warn(`Could not parse NEW_LASER event`);
+                continue;
+              }
+              console.log("NEW_LASER ", newLaserEvent);
+              break;
+            }
+            case LASER_OUT_OF_BOUNDS: {
+              // try to parse event
+              const laserOutOfBoundsEvent = parseJson<LaserOutOfBoundsEvent>(eventData);
+              if (laserOutOfBoundsEvent.isError) {
+                console.warn(`Could not parse LASER_OUT_OF_BOUNDS event`);
+                continue;
+              }
+              console.log("LASER_OUT_OF_BOUNDS ", laserOutOfBoundsEvent);
+              break;
+            }
             default: {
               console.warn("Unknown event");
             }
@@ -495,7 +536,6 @@ class WasmDappExample extends React.Component<IProps, IState> {
     const newY: number = game.get_player_y();
     const newRot: number = game.get_player_rot();
     const newW: number = game.get_player_w();
-    const lasersState: string | undefined = game.get_player_lasers(); // "{...uuid,x,y,rot,w}@{...uuid,x,y,rot,w}@{...uuid,x,y,rot,w}...""
 
     // update coors state and then update blockchain
     this.setState((prevState: IState, prevProps: IProps) => {
@@ -512,18 +552,6 @@ class WasmDappExample extends React.Component<IProps, IState> {
       console.warn("Error setting player onchain position...", ex);
     };
 
-    // send new laser state to blockchain
-    try {
-      await setPlayerLasersOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap, {
-        playerAddress: this.state.playerAddress,
-        playerUuid: this.state.playerUuid,
-        lasersData: lasersState ? lasersState : "", // pass the game state directly to the smart contract
-        time: (new Date()).getTime()
-      } as IPlayerLasersRequest);
-    } catch (ex) {
-      console.warn("Error setting player laser onchain position...", ex);
-    };
-
     // set a new timeout or not if player is disconnecting
     if (this.state.isDisconnecting) {
       if (this.updateSelfBlockchainPositionTimeout) {
@@ -531,6 +559,59 @@ class WasmDappExample extends React.Component<IProps, IState> {
       }
     } else {
       this.updateSelfBlockchainPositionTimeout = setTimeout(this.updateSelfBlockchainPosition, UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY);
+    }
+  }
+
+  updateSelfBlockchainLasers = async () => {
+    // if there is an already existing watcher, clear it
+    if (this.updateSelfBlockchainLasersTimeout) {
+      clearTimeout(this.updateSelfBlockchainLasersTimeout);
+    }
+
+    // get state from wasm
+    const laserShot: string | undefined = game.get_player_lasers(); // "JSON.stringified{player_uuid, uuid,x,y,rot,w}"
+
+    // send new laser state to blockchain by forwarding the json data to the blockchain
+    try {
+      if (laserShot) {
+        // parse the laser data
+        let parsedLaserJSON: IPlayerLaserData|undefined = undefined;
+        try {
+          parsedLaserJSON = JSON.parse(laserShot);
+        } catch (ex) {
+          console.error(`IPlayerLaserData Parse error ${ex}`);
+        }
+
+        // check for a new laser
+        if (parsedLaserJSON && parsedLaserJSON.uuid && !this.ownLasersTracker.has(parsedLaserJSON?.uuid)) {
+            this.ownLasersTracker.add(parsedLaserJSON?.uuid);
+            setTimeout(async () => {
+              await setPlayerLaserOnchain(this.state.web3Client as Client, this.state.gameAddress, this.state.threadAddressesMap,
+                {
+                  playerAddress: this.state.playerAddress,
+                  playerUuid: parsedLaserJSON?.playerUuid,
+                  uuid: parsedLaserJSON?.uuid,
+                  x: parsedLaserJSON?.x,
+                  y: parsedLaserJSON?.y,
+                  xx: parsedLaserJSON?.xx,
+                  yy: parsedLaserJSON?.yy,
+                  time: (new Date()).getTime()
+                } as IPlayerLasersRequest
+              );
+            }, 1);
+        }
+      }
+    } catch (ex) {
+      console.warn("Error setting player laser onchain position...", ex);
+    };
+
+    // set a new timeout or not if player is disconnecting
+    if (this.state.isDisconnecting) {
+      if (this.updateSelfBlockchainLasersTimeout) {
+        clearTimeout(this.updateSelfBlockchainLasersTimeout);
+      }
+    } else {
+      this.updateSelfBlockchainLasersTimeout = setTimeout(this.updateSelfBlockchainLasers, UPDATE_BLOCKCHAIN_LASERS_TIMEOUT_DELAY);
     }
   }
 
@@ -611,54 +692,60 @@ class WasmDappExample extends React.Component<IProps, IState> {
     this.remoteBlockchainPlayerPositionTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updatePlayerRemoteBlockchainPosition));
   }
 
-  updatePlayerLasersRemoteBlockchainPosition = async (playerAddress: string) => {
+  updateRemotePlayerLasersBlockchainPosition = async (playerAddress: string) => {
     // if there is an already existing watcher, clear it
     const timeout: PollTimeout | undefined = this.remoteBlockchainPlayerLasersTimeouts.get(playerAddress);
     if (timeout) {
       timeout.clear();
     }
 
-    // get player lasers from blockchain
-    let remotePlayerLasersRequest: IPlayerLasersRequest|null = null;
+    // get player laser uuids from blockchain
+    let remotePlayerLaserUuids: Array<string> = [];
     try {
-      remotePlayerLasersRequest = await getPlayerCandidateLasersPositionFromStore(this.state.web3Client as Client, this.state.gameAddress, playerAddress);
+      remotePlayerLaserUuids = await getPlayerLasersFromStore(this.state.web3Client as Client, this.state.gameAddress, playerAddress);
+      console.log("LASER UUIDS ", playerAddress, remotePlayerLaserUuids);
     } catch (ex) {
       console.error(`Error getting remote player lasers request`, ex);
     }
 
-    /*
-    // if there is data send it to the game engine
-    if (remotePlayerLasersRequest) {
-      let playerLasersData: Array<IPlayerLaserData> = [];
+    // loop over all uuids
+    for (const laserUuid of remotePlayerLaserUuids) {
+      // get the laser state from store
+      let laserState: IPlayerLaserData|null = null;
       try {
-        const laserStates = remotePlayerLasersRequest?.lasersData.split("@");
-        laserStates.forEach(laserState => {
-          let laserStateDataJSON: IPlayerLaserData|undefined = undefined;
-          try {
-            laserStateDataJSON = JSON.parse(laserState as string);
-          } catch (ex) {}
-          if (laserStateDataJSON) {
-            playerLasersData.push(laserStateDataJSON);
-          }
-        })
+        laserState = await getLaserStateFromStore(this.state.web3Client as Client, this.state.gameAddress, laserUuid);
+        //console.log("LASER STATE ", playerAddress, laserUuid, laserState);
       } catch (ex) {
-          console.error("Error parsing data for player laser");
-          throw ex;
+        console.error(`Error getting remote player lasers request`, ex);
       }
-
-      // send update events to game engine
-      const lasersGameUpdate = playerLasersData.map(laserData => {
-        return new GameEntityUpdate(LASERS_SHOT, JSON.stringify({...laserData}));
-      })
-      game.push_game_entity_updates(lasersGameUpdate);
+      if (laserState) {
+        // if no set with uuids for the player, create one
+        const playerLasersSet: Set<string> | undefined = this.remoteLasersTracker.get(playerAddress);
+        if (!playerLasersSet) {
+          let lasersSet = new Set<string>();
+          this.remoteLasersTracker.set(playerAddress, lasersSet);
+        }
+        // check for new or repeating lasers
+        let remoteLaserEntity: GameEntityUpdate;
+        if (!this.remoteLasersTracker.get(playerAddress)?.has(laserUuid)) {
+          //console.log("PERSIST NEW LASER STATE ", playerAddress, laserUuid, laserState);
+          // persist the laser uuid
+          const lasersSet = this.remoteLasersTracker.get(playerAddress);
+          lasersSet?.add(laserUuid);
+          this.remoteLasersTracker.set(playerAddress, lasersSet as Set<string>);
+          // send the message to the game engine
+          remoteLaserEntity = new GameEntityUpdate(NEW_LASER, JSON.stringify({...laserState, playerUuid: this.state.playerUuid, type: ENTITY_TYPE.REMOTE}));
+        } else {
+          //console.log("UPDATE OLD LASER STATE ", playerAddress, laserUuid, laserState);
+          // send the message to the game engine
+          remoteLaserEntity = new GameEntityUpdate(LASER_UPDATE, JSON.stringify({...laserState, playerUuid: this.state.playerUuid, type: ENTITY_TYPE.REMOTE}));
+        }
+        game.push_game_entity_updates([remoteLaserEntity]);
+      }
     }
-    */
-
-    // send update events to game engine
-    game.push_game_entity_updates([new GameEntityUpdate(LASERS_SHOT, JSON.stringify({...remotePlayerLasersRequest}))]);
 
     // set a new timeout
-    this.remoteBlockchainPlayerLasersTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updatePlayerLasersRemoteBlockchainPosition));
+    this.remoteBlockchainPlayerLasersTimeouts.set(playerAddress, new PollTimeout(UPDATE_BLOCKCHAIN_POS_TIMEOUT_DELAY, playerAddress, this.updateRemotePlayerLasersBlockchainPosition));
   }
 
   stopAllPollers = async () => {
@@ -669,6 +756,9 @@ class WasmDappExample extends React.Component<IProps, IState> {
       }
       if (this.updateSelfBlockchainPositionTimeout) {
         clearTimeout(this.updateSelfBlockchainPositionTimeout);
+      }
+      if (this.updateSelfBlockchainLasersTimeout) {
+        clearTimeout(this.updateSelfBlockchainLasersTimeout);
       }
       if (this.readSelfBlockchainPositionTimeout) {
         clearTimeout(this.readSelfBlockchainPositionTimeout);
@@ -763,7 +853,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-game-rot"
                         label="Game Rot Pos"
-                        value={this.state.playerGameState ? this.state.playerGameState.rot.toString() : "N/A"}
+                        value={this.state.playerGameState ? this.state.playerGameState.w.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />
@@ -786,7 +876,7 @@ class WasmDappExample extends React.Component<IProps, IState> {
                     <TextField
                         id="txt-field-massa-rot"
                         label="Massa Rot Pos"
-                        value={this.state.playerOnchainState ? this.state.playerOnchainState.rot.toString() : "N/A"}
+                        value={this.state.playerOnchainState ? this.state.playerOnchainState.w.toString() : "N/A"}
                         disabled={true}
                         variant="filled"
                     />

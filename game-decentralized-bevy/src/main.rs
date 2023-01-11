@@ -52,8 +52,11 @@ const SCREEN_HEIGHT: f32 = 500.0;
 const BOUNDS: Vec2 = Vec2::from_array([SCREEN_WIDTH, SCREEN_HEIGHT]);
 
 // player speeds
-const PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
-const PLAYER_LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
+const LOCAL_PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 25.0; // linear speed in meters per second
+const LOCAL_PLAYER_LINEAR_ROTATION_SPEED: f32 = 300.0; // rotation speed in radians per second
+
+const REMOTE_PLAYER_LINEAR_MOVEMENT_SPEED: f32 = 30.0; // linear speed in meters per second
+const REMOTE_PLAYER_LINEAR_ROTATION_SPEED: f32 = 320.0; // rotation speed in radians per second
 
 // laser speeds
 const LASER_LINEAR_MOVEMENT_SPEED: f32 = 45.0; // linear speed in meters per second
@@ -95,6 +98,7 @@ fn main() {
         ..default()
     });
     app.add_event::<PlayerMoved>();
+    app.add_event::<PlayerLaserEventData>();
     //app.add_plugin(LogDiagnosticsPlugin::default());
     //app.add_plugin(FrameTimeDiagnosticsPlugin::default());
     app.add_startup_system_to_stage(StartupStage::Startup, setup_system);
@@ -102,17 +106,18 @@ fn main() {
         SystemSet::new()
             .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
             //.with_system(screen_print_text)
-            .with_system(local_player_laser_shoot_system)
-            .with_system(laser_movable_system)
             .with_system(local_player_movement_system)
             .with_system(on_local_player_moved_system)
+            .with_system(local_player_laser_shoot_system)
+            .with_system(on_local_player_laser_shot_system)
+            //.with_system(laser_movable_system)
             .with_system(entities_from_blockchain_update_system)
             .with_system(interpolate_blockchain_players_state_system)
-            .with_system(interpolate_blockchain_lasers_state_system)
+            //.with_system(interpolate_blockchain_lasers_state_system)
             .with_system(player_tag_animation_system)
             .with_system(local_player_collectible_collision_system)
-            .with_system(local_player_remote_enemy_lasers_collision_system) // our player getting hit by enemy lasers
-            .with_system(remote_player_local_lasers_collision_system) // rendered remote player getting hit by my lasers
+            //.with_system(local_player_remote_enemy_lasers_collision_system) // our player getting hit by enemy lasers
+            //.with_system(remote_player_local_lasers_collision_system) // rendered remote player getting hit by my lasers
             .with_system(explosion_to_spawn_system)
             .with_system(explosion_animation_system),
     );
@@ -216,8 +221,8 @@ fn entities_from_blockchain_update_system(
                                 .insert(LocalPlayer(player_added.uuid.clone()))
                                 .insert(SpriteSize::from(PLAYER_SIZE))
                                 .insert(Velocity {
-                                    linear: PLAYER_LINEAR_MOVEMENT_SPEED,
-                                    rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
+                                    linear: LOCAL_PLAYER_LINEAR_MOVEMENT_SPEED,
+                                    rotational: f32::to_radians(LOCAL_PLAYER_LINEAR_ROTATION_SPEED),
                                 })
                                 .id();
 
@@ -265,8 +270,10 @@ fn entities_from_blockchain_update_system(
                                     .insert(RemotePlayer(player_added.uuid.clone()))
                                     .insert(SpriteSize::from(PLAYER_SIZE))
                                     .insert(Velocity {
-                                        linear: PLAYER_LINEAR_MOVEMENT_SPEED,
-                                        rotational: f32::to_radians(PLAYER_LINEAR_ROTATION_SPEED),
+                                        linear: REMOTE_PLAYER_LINEAR_MOVEMENT_SPEED,
+                                        rotational: f32::to_radians(
+                                            REMOTE_PLAYER_LINEAR_ROTATION_SPEED,
+                                        ),
                                     })
                                     .id();
 
@@ -343,7 +350,6 @@ fn entities_from_blockchain_update_system(
                     }
                 }
                 Some(RemoteStateType::TokenCollected(CollectedEntity { uuid, .. })) => {
-                    //info!("TOKEN COLLECTED {:?}", uuid);
                     // despawn entity id
                     if let Some(entity_id) = game_state.get_collectible_entity(&uuid) {
                         // despawn the remote collectible entity
@@ -352,9 +358,16 @@ fn entities_from_blockchain_update_system(
                         game_state.remove_collectible(&uuid);
                     }
                 }
-                Some(RemoteStateType::LasersShot((player_uuid, lasers_shot))) => {
-                    //info!("[BEVY] LASERS SHOT {:?}", &lasers_shot);
+                Some(RemoteStateType::LaserAdded(laser_shot)) => {
+                    info!("[BEVY] LASER ADDED EVENT {:?}", &laser_shot);
+                    // spawn the new laser
+                    let new_laser_entity_id = spawn_laser_closure(
+                        &mut commands,
+                        game_textures.laser.clone(),
+                        laser_shot.clone(),
+                    );
 
+                    /*
                     // get current in-memory player lasers map
                     let mut tree_map: BTreeMap<String, RemoteLaserState> = BTreeMap::new();
                     let mut player_lasers_map = game_state
@@ -487,6 +500,11 @@ fn entities_from_blockchain_update_system(
                         .remote_lasers
                         .insert(player_uuid, player_lasers_map);
                     //info!("---------------------");
+
+                    */
+                }
+                Some(RemoteStateType::LaserUpdated(laser_shot)) => {
+                    info!("[BEVY] LASER UPDATED EVENT {:?}", &laser_shot);
                 }
                 None => {}
             }
@@ -502,24 +520,17 @@ fn interpolate_blockchain_lasers_state_system(
 ) {
     for (entity, mut transform, velocity, remote_laser) in query.iter_mut() {
         let LaserData {
-            uuid,
             player_uuid,
+            uuid,
             start_pos,
-            start_rot,
+            unit_direction_vector,
         } = &remote_laser.0;
 
         if let Some(remote_laser_state) = game_state.remote_lasers.get_mut(player_uuid) {
             let remote_laser_pos = remote_laser_state.get(&uuid.to_string());
             if let Some(remote_laser_pos) = remote_laser_pos {
                 // TODO: how to interpolate - use the blockchain x, y state too or just the rotation ?
-                transform.rotation = Quat::from_array([
-                    0.,
-                    0.,
-                    remote_laser_pos.rot as f32,
-                    remote_laser_pos.w as f32,
-                ]);
-                let movement_direction = transform.rotation * Vec3::Y;
-                transform.translation += movement_direction * velocity.linear * TIME_STEP;
+                transform.translation += *unit_direction_vector * velocity.linear * TIME_STEP;
 
                 // despawn when out of screen
                 let mut should_despawn = false;
@@ -530,6 +541,8 @@ fn interpolate_blockchain_lasers_state_system(
                     || transform.translation.x < -win_size.w / 2.
                 {
                     should_despawn = true;
+
+                    // despawn the entity
                     commands.entity(entity).despawn();
 
                     // when out of screen remove remote laser entity if present
@@ -653,14 +666,17 @@ fn local_player_remote_enemy_lasers_collision_system(
 
             // perform collision
             if let Some(_) = collision {
-                // remove the laser
+                // remove the collided laser entity
                 commands.entity(laser_entity).despawn();
                 despawned_entities.insert(laser_entity);
 
-                // remote the hit player
-                let hit_player = game_state.entity_players.get(&local_player.0);
-                if let Some(hit_entity) = hit_player {
+                // remote the hit player entity
+                if let Some(hit_entity) = game_state.entity_players.get(&local_player.0) {
                     commands.entity(*hit_entity).despawn();
+                }
+                // remote the hit player tag entity
+                if let Some(player_tag) = game_state.entity_player_tags.get(&local_player.0) {
+                    commands.entity(*player_tag).despawn();
                 }
 
                 // spawn the explosionToSpawn
@@ -713,10 +729,13 @@ fn remote_player_local_lasers_collision_system(
                 commands.entity(laser_entity).despawn();
                 despawned_entities.insert(laser_entity);
 
-                // remote the hit player
-                let hit_player = game_state.entity_players.get(&local_player.0);
-                if let Some(hit_entity) = hit_player {
+                // remote the hit player entity
+                if let Some(hit_entity) = game_state.entity_players.get(&local_player.0) {
                     commands.entity(*hit_entity).despawn();
+                }
+                // remote the hit player tag entity
+                if let Some(player_tag) = game_state.entity_player_tags.get(&local_player.0) {
+                    commands.entity(*player_tag).despawn();
                 }
 
                 // spawn the explosionToSpawn
@@ -785,13 +804,22 @@ fn local_player_laser_shoot_system(
     time: Res<Time>,
     game_textures: Res<GameTextures>,
     mut game_state: ResMut<RemoteGameState>,
-    mut player_moved_events: EventWriter<PlayerMoved>,
+    mut events_writer: EventWriter<PlayerLaserEventData>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(&Velocity, &mut Transform, &LocalPlayer), With<LocalPlayer>>,
 ) {
     for (velocity, mut transform, local_player) in query.iter_mut() {
         // if space is pressed, shoot laser
         if keyboard_input.just_pressed(KeyCode::Space) {
+            // calculate the laser unit rotation
+            let turret_transform = Transform {
+                rotation: transform.rotation,
+                translation: Vec3::Z,
+                ..Default::default()
+            };
+            let laser_unit_direction = turret_transform.rotation * Vec3::Y;
+
+            // assign a new uuid
             let uuid = Uuid::new_v4();
             let laser_texture = game_textures.laser.clone();
             let laser_entity_id = commands
@@ -813,7 +841,7 @@ fn local_player_laser_shoot_system(
                     uuid: uuid.clone(),
                     player_uuid: local_player.0.clone(),
                     start_pos: transform.translation.clone(),
-                    start_rot: transform.rotation.clone(),
+                    unit_direction_vector: laser_unit_direction.clone(),
                 }))
                 .insert(SpriteSize::from(PLAYER_LASER_SIZE))
                 .insert(Movable { auto_despawn: true })
@@ -833,7 +861,44 @@ fn local_player_laser_shoot_system(
                     .entity_lasers
                     .insert(local_player.0.clone(), hset);
             }
+
+            // insert the laser state
+            let new_spawned_laser = RemoteLaserState {
+                player_uuid: local_player.0.clone(),
+                uuid: uuid.to_string(),
+                x: transform.translation.x as f64,
+                y: transform.translation.y as f64,
+                xx: laser_unit_direction.x as f64,
+                yy: laser_unit_direction.y as f64,
+            };
+
+            if let Some(player_lasers) = game_state.remote_lasers.get_mut(&local_player.0) {
+                player_lasers.insert(uuid.to_string(), new_spawned_laser.clone());
+            } else {
+                let mut map = BTreeMap::new();
+                map.insert(uuid.to_string(), new_spawned_laser.clone());
+                game_state.remote_lasers.insert(local_player.0.clone(), map);
+            }
+
+            // send message about laser shot
+            events_writer.send(PlayerLaserEventData {
+                player_uuid: new_spawned_laser.player_uuid.clone(),
+                uuid: new_spawned_laser.uuid.clone(),
+                x: new_spawned_laser.x,
+                y: new_spawned_laser.y,
+                xx: new_spawned_laser.xx,
+                yy: new_spawned_laser.yy,
+            });
         }
+    }
+}
+
+fn on_local_player_laser_shot_system(mut events: EventReader<PlayerLaserEventData>) {
+    for laser_shot_event in events.iter() {
+        LOCAL_PLAYER_LASERS.with(|pos| {
+            let laser_data = serde_json::to_string(&laser_shot_event).ok();
+            *pos.borrow_mut() = laser_data;
+        });
     }
 }
 
@@ -843,6 +908,33 @@ fn laser_movable_system(
     mut game_state: ResMut<RemoteGameState>,
     mut query: Query<(Entity, &Velocity, &mut Transform, &Movable, &LocalLaser), With<LocalLaser>>,
 ) {
+
+    /*
+    for (entity, velocity, mut transform, movable, local_laser) in query.iter_mut() {
+        let LaserData {
+            uuid,
+            player_uuid,
+            start_pos,
+            start_rot,
+        } = &local_laser.0;
+
+        // send over the thread the entire lasers state to the users
+        LOCAL_PLAYER_LASERS.with(|pos| {
+            let joined_laser_uuids = game_state.remote_lasers
+            .get(player_uuid)
+            .map(|map| {
+                map.keys().cloned().collect::<Vec<String>>()
+            })
+            .unwrap_or_default()
+            .join(",");
+
+            info!("LASER UUIIIDDDSSS {:?}", &joined_laser_uuids.len());
+            *pos.borrow_mut() = Some(joined_laser_uuids);
+        });
+    }
+    */
+
+    /*
     let mut serialized_lasers_data: Vec<String> = vec![];
     for (entity, velocity, mut transform, movable, local_laser) in query.iter_mut() {
         let LaserData {
@@ -901,6 +993,7 @@ fn laser_movable_system(
         let joined_lasers = serialized_lasers_data.join("@");
         *pos.borrow_mut() = Some(joined_lasers);
     });
+    */
 }
 
 fn player_tag_animation_system(

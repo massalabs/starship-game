@@ -1,6 +1,6 @@
 import { Client, EOperationStatus, EventPoller, IAccount, ICallData, IContractStorageData, IDatastoreEntryInput, IEventFilter, INodeStatus, IReadData, WalletClient } from "@massalabs/massa-web3";
 import { IPlayerOnchainEntity } from "./entities/PlayerEntity";
-import { IPlayerLasersRequest } from "./entities/PlayerLasers";
+import { IPlayerLaserData, IPlayerLasersRequest } from "./entities/PlayerLasers";
 import { ITokenOnchainEntity } from "./entities/TokenEntity";
 
 export const registerPlayer = async (web3Client: Client, gameAddress: string, playerName: string, playerAddress: string, executors: string, awaitFinalization: boolean): Promise<IPlayerOnchainEntity|undefined> => {
@@ -129,7 +129,7 @@ export const getPlayerCandidatePositionFromStore = async (web3Client: Client, ga
   return playerEntity as IPlayerOnchainEntity;
 }
 
-export const getPlayerCandidateLasersPositionFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<IPlayerLasersRequest|null> => {
+export const getPlayerLasersFromStore = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
   let scStorageData: IContractStorageData[] = [];
   try {
     scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `registered_players_lasers_key::${playerAddress}` } as IDatastoreEntryInput]);
@@ -139,19 +139,33 @@ export const getPlayerCandidateLasersPositionFromStore = async (web3Client: Clie
   }
 
   if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
+    return [];
+  }
+  const candidatePos = scStorageData[0].candidate;
+  return candidatePos.split(",");
+}
+
+export const getLaserStateFromStore = async (web3Client: Client, gameAddress: string, laserUuid: string): Promise<IPlayerLaserData|null> => {
+  let scStorageData: IContractStorageData[] = [];
+  try {
+    scStorageData = await web3Client.publicApi().getDatastoreEntries([{address: gameAddress, key: `laser_states_key::${laserUuid}` } as IDatastoreEntryInput]);
+  } catch (ex) {
+      console.error("Error parsing data for player entity", ex);
+      throw ex;
+  }
+  if (!scStorageData || !scStorageData[0] || !scStorageData[0].candidate) {
     return null;
   }
   const candidatePos = scStorageData[0].candidate;
-  let playerLasersRequest: IPlayerLasersRequest|undefined = undefined;
+  let playerLaser: IPlayerLaserData|undefined = undefined;
   try {
-    playerLasersRequest = JSON.parse(candidatePos as string);
+    playerLaser = JSON.parse(candidatePos as string);
   } catch (ex) {
-      console.error("Error parsing data for player lasers request", candidatePos);
+      console.error("Error parsing data for player laser", candidatePos);
       throw ex;
   }
-  return playerLasersRequest as IPlayerLasersRequest;
+  return playerLaser as IPlayerLaserData;
 }
-
 
 export const isPlayerRegistered = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<boolean> => {
     const readTxData = await web3Client.smartContracts().readSmartContract({
@@ -382,7 +396,21 @@ export const getCollectiblesState = async (web3Client: Client, gameAddress: stri
   });
 }
 
-const formatNumbersToDecimalPrecision = (input: any): string => {
+export const getPlayerLasersUuids = async (web3Client: Client, gameAddress: string, playerAddress: string): Promise<Array<string>> => {
+  const readTxData = await web3Client.smartContracts().readSmartContract({
+      fee: 0,
+      maxGas: 200000,
+      simulatedGasPrice: 0,
+      targetAddress: gameAddress,
+      targetFunction: "getPlayerLasersUuids",
+      parameter: playerAddress,
+      callerAddress: playerAddress
+  } as IReadData);
+
+  return readTxData[0].output_events[0].data.split(",");
+}
+
+const stringifyAndFormatNumbers = (input: any): string => {
   for (let key of Object.keys(input)) {
     if (typeof input[key] === "number") input[key] = input[key].toFixed(2);
   }
@@ -390,7 +418,7 @@ const formatNumbersToDecimalPrecision = (input: any): string => {
 }
 
 export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerUpdate: IPlayerOnchainEntity): Promise<string|undefined> => {
-    //console.log("UPDATE ", formatNumbersToDecimalPrecision(playerUpdate));
+    //console.log("UPDATE ", stringifyAndFormatNumbers(playerUpdate));
   
     // evaluate thread from which to send
     let nodeStatusInfo: INodeStatus|null|undefined = null;
@@ -420,9 +448,9 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target smart contract address
         targetAddress: gameAddress,
         /// Target function name. No function is called if empty.
-        functionName: "setAbsCoors",
+        functionName: "setPlayerAbsCoors",
         /// Parameter to pass to the target function
-        parameter: formatNumbersToDecimalPrecision(playerUpdate)
+        parameter: stringifyAndFormatNumbers(playerUpdate)
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);
@@ -432,7 +460,7 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
     return opIds ? opIds[0] : undefined;
   }
 
-  export const setPlayerLasersOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
+  export const setPlayerLaserOnchain = async (web3Client: Client, gameAddress: string, threadAddressesMap: Map<string, IAccount>, playerLasersUpdate: IPlayerLasersRequest): Promise<string|undefined> => {
      // evaluate thread from which to send
     let nodeStatusInfo: INodeStatus|null|undefined = null;
     try {
@@ -446,6 +474,8 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
     //console.log("Next thread to execute op with = ", threadForNextOp);
     const executor = threadAddressesMap.get(threadForNextOp.toString());
     let opIds;
+    const payload = stringifyAndFormatNumbers(playerLasersUpdate);
+    console.log("Payload ", payload)
     try {
       opIds = await web3Client?.smartContracts().callSmartContract({
         /// storage fee for taking place in books
@@ -461,14 +491,14 @@ export const setPlayerPositionOnchain = async (web3Client: Client, gameAddress: 
         /// Target smart contract address
         targetAddress: gameAddress,
         /// Target function name. No function is called if empty.
-        functionName: "setLaserPos",
+        functionName: "setPlayerLaserPos",
         /// Parameter to pass to the target function
-        parameter: formatNumbersToDecimalPrecision(playerLasersUpdate)
+        parameter: payload
       } as ICallData, executor as IAccount);
     } catch (ex) {
       console.error(`Error setting object coords to sc`, ex);
       throw ex;
     }
-    //console.log("Updated Blockchain Coords OP_ID", opIds);
+    console.log("Set Player Laser OP_ID", opIds);
     return opIds ? opIds[0] : undefined;
   }
